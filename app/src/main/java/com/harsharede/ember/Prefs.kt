@@ -14,7 +14,7 @@ class Prefs(context: Context) {
     val hiddenStatus: StateFlow<Set<String>> = _hiddenStatus.asStateFlow()
 
     private val _dock = MutableStateFlow(readDock())
-    /** App keys in the rail's dock, top to bottom. An empty string is an empty slot. */
+    /** App keys in the rail's dock, top to bottom, as many as the user likes. */
     val dock: StateFlow<List<String>> = _dock.asStateFlow()
 
     private val _pill = MutableStateFlow(sp.getBoolean(KEY_PILL, true))
@@ -53,24 +53,49 @@ class Prefs(context: Context) {
 
     data class HomeWidget(val id: Int, val heightDp: Int)
 
-    // The Smart Stack: widgets in one card that flips to the next every few seconds.
-    private val _stack = MutableStateFlow(sp.getString(KEY_STACK, null).orEmpty().split(',').mapNotNull { it.toIntOrNull() })
-    val stackWidgets: StateFlow<List<Int>> = _stack.asStateFlow()
+    // The Smart Stack: Ember's own cards, app feeds and widgets in one card that flips every few seconds.
+    // Items are "card:weather", "card:people", "card:media", "card:calendar", "card:suggestions", "feed:<package>", "widget:<id>".
+    private val _stack = MutableStateFlow(readStack())
+    val stackItems: StateFlow<List<String>> = _stack.asStateFlow()
+    /** The widget ids in the stack. */
+    val stackWidgetIds: List<Int> get() = _stack.value.filter { it.startsWith("widget:") }.mapNotNull { it.removePrefix("widget:").toIntOrNull() }
     private val _stackHeight = MutableStateFlow(sp.getInt(KEY_STACK_HEIGHT, 190))
     val stackHeight: StateFlow<Int> = _stackHeight.asStateFlow()
     private val _stackSeconds = MutableStateFlow(sp.getInt(KEY_STACK_SECONDS, 7))
-    /** Seconds on each widget before the stack moves on (only while Home is on screen). */
+    /** Seconds on each card before the stack moves on (only while Home is on screen). */
     val stackSeconds: StateFlow<Int> = _stackSeconds.asStateFlow()
-    private val _stackSuggestions = MutableStateFlow(sp.getBoolean(KEY_STACK_SUGGESTIONS, false))
-    /** Keep app Suggestions as one page of the stack. */
-    val stackSuggestions: StateFlow<Boolean> = _stackSuggestions.asStateFlow()
 
-    fun addStackWidget(id: Int) = saveStack(_stack.value.filter { it != id } + id)
-    fun removeStackWidget(id: Int) { if (id in _stack.value) saveStack(_stack.value - id) }
-    private fun saveStack(list: List<Int>) { _stack.value = list; sp.edit().putString(KEY_STACK, list.joinToString(",")).apply() }
+    fun addStackItem(item: String) { if (item !in _stack.value) saveStack(_stack.value + item) }
+    fun removeStackItem(item: String) { if (item in _stack.value) saveStack(_stack.value - item) }
+    fun moveStackItem(item: String, by: Int) {
+        val list = _stack.value.toMutableList()
+        val i = list.indexOf(item); val j = i + by
+        if (i < 0 || j !in list.indices) return
+        list.add(j, list.removeAt(i)); saveStack(list)
+    }
+    private fun saveStack(list: List<String>) { _stack.value = list; sp.edit().putString(KEY_STACK_ITEMS, list.joinToString(",")).apply() }
+    private fun readStack(): List<String> {
+        sp.getString(KEY_STACK_ITEMS, null)?.let { saved -> return saved.split(',').filter { it.isNotBlank() } }
+        // First run of this version: carry over the widgets (and Suggestions) from the older stack.
+        val widgets = sp.getString(KEY_STACK, null).orEmpty().split(',').mapNotNull { it.toIntOrNull() }.map { "widget:$it" }
+        val suggestions = if (sp.getBoolean(KEY_STACK_SUGGESTIONS, false) || widgets.isEmpty()) listOf("card:suggestions") else emptyList()
+        return listOf("card:media", "card:people") + suggestions + widgets
+    }
+
+    // Weather card: a city the user chose, or their location.
+    private val _weatherPlace = MutableStateFlow(readPlace())
+    /** Name, latitude, longitude of the chosen city; null means "use my location". */
+    val weatherPlace: StateFlow<Triple<String, Double, Double>?> = _weatherPlace.asStateFlow()
+    fun setWeatherPlace(place: Triple<String, Double, Double>?) {
+        _weatherPlace.value = place
+        sp.edit().putString(KEY_WEATHER_PLACE, place?.let { "${it.first}\t${it.second}\t${it.third}" }).apply()
+    }
+    private fun readPlace(): Triple<String, Double, Double>? = sp.getString(KEY_WEATHER_PLACE, null)?.split('\t')?.let { p ->
+        if (p.size == 3) Triple(p[0], p[1].toDoubleOrNull() ?: return@let null, p[2].toDoubleOrNull() ?: return@let null) else null
+    }
+
     fun setStackHeight(dp: Int) { _stackHeight.value = dp; sp.edit().putInt(KEY_STACK_HEIGHT, dp).apply() }
     fun setStackSeconds(s: Int) { _stackSeconds.value = s; sp.edit().putInt(KEY_STACK_SECONDS, s).apply() }
-    fun setStackSuggestions(on: Boolean) { _stackSuggestions.value = on; sp.edit().putBoolean(KEY_STACK_SUGGESTIONS, on).apply() }
 
     private val _light = MutableStateFlow(sp.getBoolean(KEY_LIGHT, true))
     /** The lock-screen light: wake the screen black with a glowing pill when something arrives with the screen off. */
@@ -176,15 +201,21 @@ class Prefs(context: Context) {
         sp.edit().putStringSet(KEY_HIDDEN, set).apply()
     }
 
+    /** Put [key] at [index] (replacing what's there), or at the end when [index] is past the last app. */
     fun setDockSlot(index: Int, key: String) {
-        val list = _dock.value.toMutableList()
-        while (list.size <= index) list += ""
-        // One app appears in the dock once: moving it clears its old slot.
-        for (i in list.indices) if (list[i] == key && i != index) list[i] = ""
-        list[index] = key
-        _dock.value = list
-        sp.edit().putString(KEY_DOCK, list.joinToString(SEP)).apply()
+        val list = _dock.value.filter { it != key }.toMutableList()
+        if (index in list.indices) list[index] = key else list += key
+        saveDock(list)
     }
+    fun addToDock(key: String) { if (key !in _dock.value) saveDock(_dock.value + key) }
+    fun removeFromDock(key: String) = saveDock(_dock.value - key)
+    fun moveInDock(key: String, by: Int) {
+        val list = _dock.value.toMutableList()
+        val i = list.indexOf(key); val j = i + by
+        if (i < 0 || j !in list.indices) return
+        list.add(j, list.removeAt(i)); saveDock(list)
+    }
+    private fun saveDock(list: List<String>) { _dock.value = list; sp.edit().putString(KEY_DOCK, list.joinToString(SEP)).apply() }
 
     fun setPill(on: Boolean) { _pill.value = on; sp.edit().putBoolean(KEY_PILL, on).apply() }
     fun setHideStatusBar(on: Boolean) { _hideStatusBar.value = on; sp.edit().putBoolean(KEY_HIDE_BAR, on).apply() }
@@ -198,10 +229,8 @@ class Prefs(context: Context) {
         sp.edit().putString(KEY_LAUNCHES, trimmed.entries.joinToString(SEP) { "${it.key}$FIELD${it.value.count}$FIELD${it.value.last}" }).apply()
     }
 
-    private fun readDock(): List<String> {
-        val raw = sp.getString(KEY_DOCK, null) ?: return List(DOCK_SLOTS) { "" }
-        return raw.split(SEP).let { if (it.size < DOCK_SLOTS) it + List(DOCK_SLOTS - it.size) { "" } else it }
-    }
+    // Older versions kept four fixed places, with empty strings for empty ones.
+    private fun readDock(): List<String> = sp.getString(KEY_DOCK, null).orEmpty().split(SEP).filter { it.isNotBlank() }
 
     private fun readLaunches(): Map<String, Launch> =
         sp.getString(KEY_LAUNCHES, null).orEmpty().split(SEP).mapNotNull { line ->
@@ -210,7 +239,6 @@ class Prefs(context: Context) {
         }.toMap()
 
     companion object {
-        const val DOCK_SLOTS = 4
         private const val KEY_HIDDEN = "hidden_status"
         private const val KEY_DOCK = "dock"
         private const val KEY_PILL = "pill"
@@ -226,6 +254,8 @@ class Prefs(context: Context) {
         private const val KEY_STACK_HEIGHT = "stack_height"
         private const val KEY_STACK_SECONDS = "stack_seconds"
         private const val KEY_STACK_SUGGESTIONS = "stack_suggestions"
+        private const val KEY_STACK_ITEMS = "stack_items"
+        private const val KEY_WEATHER_PLACE = "weather_place"
         private const val KEY_WP_ROTATE = "wp_rotate"
         private const val KEY_WP_EVERY = "wp_every"
         private const val KEY_WP_LOCK = "wp_lock"

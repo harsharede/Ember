@@ -18,16 +18,21 @@ class EmberNotificationListener : NotificationListenerService() {
         current = this
         NotificationStore.setConnected(true)
         pill = PillOverlay(this).also { it.start() }
+        NowPlaying.start(this, android.content.ComponentName(this, EmberNotificationListener::class.java))
         val apps = EmberApp.instance.apps
         val map = runCatching { currentRanking }.getOrNull()
         val list = runCatching { activeNotifications }.getOrNull().orEmpty()
             .mapNotNull { it.toItem(packageName, apps::labelForPackage, rankingFor(it.key, map)) }
         NotificationStore.replaceAll(list)
+        runCatching { activeNotifications }.getOrNull().orEmpty().sortedBy { it.postTime }.forEach { sbn ->
+            list.firstOrNull { it.key == sbn.key }?.let { item -> runCatching { Feeds.record(this, sbn, item) } }
+        }
     }
 
     override fun onListenerDisconnected() {
         if (current === this) current = null
         pill?.stop(); pill = null
+        NowPlaying.stop()
         NotificationStore.setConnected(false)
     }
 
@@ -35,6 +40,7 @@ class EmberNotificationListener : NotificationListenerService() {
         val ranking = rankingFor(sbn.key, rankingMap)
         val item = sbn.toItem(packageName, EmberApp.instance.apps::labelForPackage, ranking)
         if (item == null) { NotificationStore.remove(sbn.key); return }
+        runCatching { Feeds.record(this, sbn, item) }
         val existing = NotificationStore.items.value.firstOrNull { it.key == item.key }
         val alerting = !item.silent && !item.persistent && alerts(sbn, existing, rankingMap)
         NotificationStore.upsert(item, alerts = alerting)

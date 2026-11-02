@@ -21,7 +21,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AirplanemodeActive
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.ThumbDown
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.EnergySavingsLeaf
@@ -193,20 +208,68 @@ private fun cellIcon(level: Int): ImageVector = when {
     else -> Icons.Rounded.SignalCellular4Bar
 }
 
-/** The dock under the capsule. Tap to open; hold to pick a different app for that place. */
+/**
+ * The dock under the capsule: as many apps as you like, top to bottom. It takes the room left between the capsule and
+ * the wallpaper buttons; when the capsule grows (more status icons, notifications opened) the dock gets shorter and
+ * scrolls, with a small arrow saying there's more. Tap to open; hold for change, move or remove; + adds one.
+ */
 @Composable
-fun DockColumn(slots: List<AppEntry?>, modifier: Modifier = Modifier, onLaunch: (AppEntry) -> Unit, onChoose: (Int) -> Unit) {
-    Column(modifier.glass(RoundedCornerShape(36.dp)).padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        slots.forEachIndexed { index, app ->
-            Box(Modifier.clip(CircleShape).combinedClickable(onLongClick = { onChoose(index) }, onClick = { if (app != null) onLaunch(app) else onChoose(index) })
-                .padding(2.dp), contentAlignment = Alignment.Center) {
-                if (app != null) AppIcon(app, 52.dp)
-                else Box(Modifier.size(52.dp).clip(CircleShape).background(Color.White.copy(alpha = .06f)), contentAlignment = Alignment.Center) {
-                    Text("+", color = EmberColors.Secondary, fontSize = 22.sp)
+fun DockColumn(apps: List<AppEntry>, modifier: Modifier = Modifier, onLaunch: (AppEntry) -> Unit, onChoose: (Int) -> Unit) {
+    val prefs = EmberApp.instance.prefs
+    val scroll = rememberScrollState()
+    Box(modifier.glass(RoundedCornerShape(36.dp))) {
+        Column(Modifier.verticalScroll(scroll).padding(vertical = 12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            apps.forEachIndexed { index, app ->
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    Box(Modifier.clip(CircleShape).combinedClickable(onLongClick = { menu = true }, onClick = { onLaunch(app) }).padding(2.dp)) {
+                        AppIcon(app, 52.dp)
+                    }
+                    DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem({ Text("Change app") }, { menu = false; onChoose(index) })
+                        if (index > 0) DropdownMenuItem({ Text("Move up") }, { menu = false; prefs.moveInDock(app.key, -1) })
+                        if (index < apps.lastIndex) DropdownMenuItem({ Text("Move down") }, { menu = false; prefs.moveInDock(app.key, 1) })
+                        DropdownMenuItem({ Text("Remove from dock") }, { menu = false; prefs.removeFromDock(app.key) })
+                    }
                 }
             }
+            Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = .06f)).clickable { onChoose(apps.size) },
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Add, "Add an app to the dock", tint = EmberColors.Secondary)
+            }
         }
+        // More above or below than fits: a small arrow at that edge.
+        if (scroll.canScrollBackward) MoreArrow(Icons.Rounded.KeyboardArrowUp, Modifier.align(Alignment.TopCenter))
+        if (scroll.canScrollForward) MoreArrow(Icons.Rounded.KeyboardArrowDown, Modifier.align(Alignment.BottomCenter))
     }
 }
 
+@Composable
+private fun MoreArrow(icon: ImageVector, modifier: Modifier) {
+    Box(modifier.padding(2.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = .9f)).padding(1.dp)) {
+        Icon(icon, "More apps", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** The wallpaper buttons as a small dock under the apps: dislike (swap now, never again), new photo, like. */
+@Composable
+fun WallpaperDock(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val current by Wallpapers.current.collectAsStateWithLifecycle()
+    val changing by Wallpapers.changing.collectAsStateWithLifecycle()
+    val liked = current?.liked == true
+    Column(modifier.glass(RoundedCornerShape(36.dp)).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton({ Wallpapers.like() }, enabled = current != null && !changing) {
+            Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Liked" else "Like this wallpaper",
+                tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        IconButton({ Wallpapers.changeNow(context) }, enabled = !changing) {
+            if (changing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            else Icon(Icons.Rounded.Refresh, "New wallpaper", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        IconButton({ Wallpapers.dislike(context) }, enabled = !changing) {
+            Icon(Icons.Rounded.ThumbDown, "Don't show this photo again", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}

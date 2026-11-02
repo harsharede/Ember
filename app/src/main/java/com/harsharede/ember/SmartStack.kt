@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,12 +25,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.UnfoldLess
 import androidx.compose.material.icons.rounded.UnfoldMore
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -111,7 +113,7 @@ object SmartStack {
     /** Fill the stack with what's installed. Apps already in it are skipped, so running it again only adds new ones. */
     fun autoPick(activity: Activity, scope: CoroutineScope) {
         scope.launch {
-            val inStack = EmberApp.instance.prefs.stackWidgets.value.mapNotNull {
+            val inStack = EmberApp.instance.prefs.stackWidgetIds.mapNotNull {
                 runCatching { Widgets.manager.getAppWidgetInfo(it)?.provider?.packageName }.getOrNull()
             }.toSet()
             val picks = candidates(activity, inStack).take((MAX - inStack.size).coerceAtLeast(0))
@@ -121,38 +123,60 @@ object SmartStack {
     }
 }
 
+/** Human names for stack items, for the editor and for TalkBack. */
+fun stackItemTitle(item: String): String = when {
+    item == "card:weather" -> "Weather"
+    item == "card:people" -> "People"
+    item == "card:media" -> "Now playing"
+    item == "card:calendar" -> "Up next"
+    item == "card:suggestions" -> "App suggestions"
+    item.startsWith("feed:") -> EmberApp.instance.apps.labelForPackage(item.removePrefix("feed:"))
+    item.startsWith("widget:") -> item.removePrefix("widget:").toIntOrNull()?.let { id ->
+        runCatching { Widgets.manager.getAppWidgetInfo(id)?.let { info ->
+            "${EmberApp.instance.apps.labelForPackage(info.provider.packageName)} · ${info.loadLabel(EmberApp.instance.packageManager)}" } }.getOrNull()
+    } ?: "Widget"
+    else -> item
+}
+
 /**
- * The Smart Stack: widgets in one card that moves on to the next every few seconds while Home is on screen and
- * nobody's touching it. Swipe sideways to flip by hand; a touch pauses it for a while.
+ * The Smart Stack: Ember's cards, app feeds and widgets in one card that moves on every few seconds while Home is on
+ * screen and nobody's touching it. Cards with nothing to show (nothing playing, no posts yet) step out of the rotation
+ * until they do. Swipe sideways to flip by hand; the pencil opens the editor.
  */
 @Composable
 fun SmartStackCard(
     widthDp: Int,
     active: Boolean,
     editing: Boolean,
-    suggestions: (@Composable () -> Unit)?,
-    onAutoPick: () -> Unit,
-    onAdd: () -> Unit,
+    suggestions: @Composable () -> Unit,
+    onEdit: () -> Unit,
 ) {
     val prefs = EmberApp.instance.prefs
-    val ids by prefs.stackWidgets.collectAsStateWithLifecycle()
+    val items by prefs.stackItems.collectAsStateWithLifecycle()
     val height by prefs.stackHeight.collectAsStateWithLifecycle()
     val seconds by prefs.stackSeconds.collectAsStateWithLifecycle()
-    val pages = remember(ids, suggestions != null) { (if (suggestions != null) listOf(-1) else emptyList()) + ids }
-
-    if (ids.isEmpty()) {
-        // Nothing chosen yet: offer to fill it, and keep Suggestions showing meanwhile.
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            suggestions?.invoke()
-            Column(Modifier.fillMaxWidth().glass().padding(18.dp)) {
-                Text("Smart Stack", style = MaterialTheme.typography.titleSmall, color = EmberColors.Secondary)
-                Text("Widgets from your apps (news, Reddit, YouTube, weather…) in one card that flips every few seconds.",
-                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp, bottom = 12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(onAutoPick) { Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Text("  Pick for me") }
-                    OutlinedButton(onAdd) { Text("Choose") }
-                }
+    val media by NowPlaying.info.collectAsStateWithLifecycle()
+    val feeds by Feeds.posts.collectAsStateWithLifecycle()
+    val starred by CardData.starred.collectAsStateWithLifecycle()
+    val events by CardData.events.collectAsStateWithLifecycle()
+    val pages = remember(items, media != null, feeds, starred.isNotEmpty(), events.isNotEmpty()) {
+        items.filter { item ->
+            when {
+                item == "card:media" -> media != null
+                item == "card:people" -> starred.isNotEmpty() || recentPeople(feeds, 1).isNotEmpty()
+                item == "card:calendar" -> events.isNotEmpty()
+                item.startsWith("feed:") -> feeds[item.removePrefix("feed:")]?.any { !it.conversation } == true
+                else -> true
             }
+        }
+    }
+
+    if (pages.isEmpty()) {
+        Column(Modifier.fillMaxWidth().glass().padding(18.dp)) {
+            Text("Smart Stack", style = MaterialTheme.typography.titleSmall, color = EmberColors.Secondary)
+            Text("Weather, people, what's playing, your next event, YouTube or Reddit posts and widgets, in one card that flips every few seconds.",
+                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp, bottom = 12.dp))
+            FilledTonalButton(onEdit) { Icon(Icons.Rounded.Edit, null, Modifier.size(18.dp)); Text("  Set it up") }
         }
         return
     }
@@ -181,25 +205,36 @@ fun SmartStackCard(
         HorizontalPager(pager, Modifier.fillMaxWidth().height(animatedHeight).clip(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
             .stackSwipe(pager, scope) { touchedAt = System.currentTimeMillis() },
             userScrollEnabled = false, beyondViewportPageCount = pages.size, pageSpacing = 12.dp, key = { pages[it] }) { page ->
-            val id = pages[page]
-            if (id == -1) Box(Modifier.fillMaxWidth()) { suggestions?.invoke() }
-            else WidgetFrame(id, widthDp, height)
-        }
-        if (pages.size > 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
-            repeat(pages.size) { i ->
-                val selected = i == pager.currentPage
-                val w by animateDpAsState(if (selected) 16.dp else 6.dp, label = "dot")
-                Box(Modifier.padding(horizontal = 3.dp).size(width = w, height = 6.dp).clip(CircleShape)
-                    .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = .35f)))
+            val item = pages[page]
+            Box(Modifier.fillMaxSize()) {
+                when {
+                    item == "card:weather" -> WeatherCard()
+                    item == "card:people" -> PeopleCard()
+                    item == "card:media" -> media?.let { NowPlayingCard(it) }
+                    item == "card:calendar" -> CalendarCard()
+                    item == "card:suggestions" -> suggestions()
+                    item.startsWith("feed:") -> feeds[item.removePrefix("feed:")]?.filter { !it.conversation }?.takeIf { it.isNotEmpty() }
+                        ?.let { FeedCard(item.removePrefix("feed:"), it) }
+                    item.startsWith("widget:") -> item.removePrefix("widget:").toIntOrNull()?.let { WidgetFrame(it, widthDp, height) }
+                }
             }
         }
-        if (editing) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
-            FilledTonalIconButton(onAdd) { Icon(Icons.Rounded.Add, "Add a widget to the stack") }
-            FilledTonalIconButton(onAutoPick) { Icon(Icons.Rounded.AutoAwesome, "Pick more for me") }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp))
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
+                if (pages.size > 1) repeat(pages.size) { i ->
+                    val selected = i == pager.currentPage
+                    val w by animateDpAsState(if (selected) 16.dp else 6.dp, label = "dot")
+                    Box(Modifier.padding(horizontal = 3.dp).size(width = w, height = 6.dp).clip(CircleShape)
+                        .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = .35f)))
+                }
+            }
+            IconButton(onEdit, Modifier.size(40.dp)) { Icon(Icons.Rounded.Edit, "Edit the stack", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f), modifier = Modifier.size(18.dp)) }
+        }
+        if (editing) Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
             FilledTonalIconButton({ prefs.setStackHeight((height - 30).coerceAtLeast(110)) }) { Icon(Icons.Rounded.UnfoldLess, "Shorter") }
             FilledTonalIconButton({ prefs.setStackHeight((height + 30).coerceAtMost(420)) }) { Icon(Icons.Rounded.UnfoldMore, "Taller") }
-            FilledTonalIconButton({ pages.getOrNull(pager.currentPage)?.takeIf { it >= 0 }?.let { Widgets.remove(it) } },
-                enabled = (pages.getOrNull(pager.currentPage) ?: -1) >= 0) { Icon(Icons.Rounded.Delete, "Remove this widget") }
+            FilledTonalIconButton(onEdit) { Icon(Icons.Rounded.Edit, "Edit the stack") }
         }
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -98,8 +99,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val rotating by app.prefs.wallpaperRotate.collectAsStateWithLifecycle()
     val showWallpaperButtons by app.prefs.wallpaperCard.collectAsStateWithLifecycle()
     val wallpaperCard = rotating && showWallpaperButtons
-    val stackIds by app.prefs.stackWidgets.collectAsStateWithLifecycle()
-    val stackSuggestions by app.prefs.stackSuggestions.collectAsStateWithLifecycle()
+    var stackEditor by remember { mutableStateOf(false) }
     val notifications by NotificationStore.items.collectAsStateWithLifecycle()
     val connected by NotificationStore.connected.collectAsStateWithLifecycle()
     val status by rememberDeviceStatus()
@@ -120,19 +120,17 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
 
     // Only what's worth attention counts on the rail: not silent ones, not ones that can't be dismissed.
     val counted = remember(notifications) { notifications.filter { !it.silent && !it.persistent } }
-    val dock = remember(apps, dockKeys) { dockKeys.map { key -> apps.firstOrNull { it.key == key } } }
+    val dock = remember(apps, dockKeys) { dockKeys.mapNotNull { key -> apps.firstOrNull { it.key == key } } }
     val suggestions = remember(apps, launches, dockKeys, now / 3_600_000) { suggest(apps, launches, dockKeys.toSet(), now) }
     val launch: (AppEntry) -> Unit = { entry -> app.apps.launch(entry); drawer.hide(); notes.hide() }
-    val addToDock: (AppEntry) -> Unit = { entry ->
-        val slot = dockKeys.indexOfFirst { it.isEmpty() }.takeIf { it >= 0 } ?: (Prefs.DOCK_SLOTS - 1)
-        app.prefs.setDockSlot(slot, entry.key)
-    }
+    val addToDock: (AppEntry) -> Unit = { entry -> app.prefs.addToDock(entry.key) }
     LaunchedEffect(requests.openNotifications) { if (requests.openNotifications > 0) { drawer.hide(); notificationFilter = null; notes.show() } }
-    LaunchedEffect(requests.closeAll) { if (requests.closeAll == 0) return@LaunchedEffect; drawer.hide(); notes.hide(); pickDockSlot = null; editing = false; requests.pickWidget = false }
+    LaunchedEffect(requests.closeAll) { if (requests.closeAll == 0) return@LaunchedEffect; drawer.hide(); notes.hide(); pickDockSlot = null; editing = false; requests.pickWidget = false; stackEditor = false }
 
-    BackHandler(drawerShown || notesShown || pickDockSlot != null || editing || requests.pickWidget) {
+    BackHandler(drawerShown || notesShown || pickDockSlot != null || editing || requests.pickWidget || stackEditor) {
         when {
             requests.pickWidget -> requests.pickWidget = false
+            stackEditor -> stackEditor = false
             pickDockSlot != null -> pickDockSlot = null
             drawerShown -> drawer.hide()
             notesShown -> notes.hide()
@@ -176,12 +174,10 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
                         item("date") { DateHeader(now) }
                         item("stack") {
-                            SmartStackCard(columnWidth, active = !drawerShown && !notesShown, editing = editing,
-                                suggestions = if (stackSuggestions || stackIds.isEmpty()) ({ SuggestionsCard(suggestions, apps.isEmpty(), launch) }) else null,
-                                onAutoPick = onAutoPick,
-                                onAdd = { requests.pickTarget = Widgets.Target.STACK; requests.pickWidget = true })
+                            SmartStackCard(columnWidth, active = !drawerShown && !notesShown && !stackEditor, editing = editing,
+                                suggestions = { SuggestionsCard(suggestions, apps.isEmpty(), launch) },
+                                onEdit = { stackEditor = true })
                         }
-                        if (wallpaperCard) item("wallpaper") { WallpaperCard() }
                         if (!connected) item("access") { AccessCard() }
                         items(widgets, key = { "w${it.id}" }) { widget -> HomeWidgetView(widget, editing, columnWidth) }
                         if (editing) item("edit-actions") {
@@ -192,9 +188,12 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                         }
                     }
                 }
-                Column(Modifier.width(92.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // The rail: status on top, then the dock taking whatever room is left (it scrolls when that's not enough),
+                // then the wallpaper buttons at the bottom.
+                Column(Modifier.width(92.dp).fillMaxHeight().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth()) { pkg -> notificationFilter = pkg; notes.show() }
-                    DockColumn(dock, Modifier.fillMaxWidth(), onLaunch = launch, onChoose = { pickDockSlot = it })
+                    DockColumn(dock, Modifier.fillMaxWidth().weight(1f, fill = false), onLaunch = launch, onChoose = { pickDockSlot = it })
+                    if (wallpaperCard) WallpaperDock(Modifier.fillMaxWidth())
                 }
             }
             // A small handle says there's more below.
@@ -205,7 +204,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             Box(Modifier.align(Alignment.Center)) {
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem({ Text("Add widget") }, { menu = false; requests.pickTarget = Widgets.Target.HOME; requests.pickWidget = true })
-                    DropdownMenuItem({ Text("Fill Smart Stack for me") }, { menu = false; onAutoPick() })
+                    DropdownMenuItem({ Text("Edit Smart Stack") }, { menu = false; stackEditor = true })
                     DropdownMenuItem({ Text(if (editing) "Done editing" else "Edit Home") }, { menu = false; editing = !editing })
                     DropdownMenuItem({ Text("Wallpaper") }, { menu = false
                         runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper")) } })
@@ -230,13 +229,17 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
         }
         val slot = pickDockSlot
         AnimatedVisibility(slot != null, enter = fadeIn(), exit = fadeOut()) {
-            AppDrawer(apps, open = slot != null, layer = null, title = "Choose an app for the dock",
+            AppDrawer(apps, open = slot != null, layer = null, title = if (slot != null && slot < dockKeys.size) "Change this dock app" else "Add an app to the dock",
                 onLaunch = { entry -> if (slot != null) app.prefs.setDockSlot(slot, entry.key); pickDockSlot = null },
                 onAddToDock = { entry -> if (slot != null) app.prefs.setDockSlot(slot, entry.key); pickDockSlot = null },
                 onClose = { pickDockSlot = null })
         }
+        AnimatedVisibility(stackEditor, enter = fadeIn(), exit = fadeOut()) {
+            StackEditor(onAddWidget = { requests.pickTarget = Widgets.Target.STACK; requests.pickWidget = true },
+                onAutoPick = onAutoPick, onClose = { stackEditor = false })
+        }
         AnimatedVisibility(requests.pickWidget, enter = fadeIn(), exit = fadeOut()) {
-            WidgetPicker(onPick = { info -> requests.pickWidget = false; editing = true; onAddWidget(info, requests.pickTarget) },
+            WidgetPicker(onPick = { info -> requests.pickWidget = false; if (requests.pickTarget == Widgets.Target.HOME) editing = true; onAddWidget(info, requests.pickTarget) },
                 onClose = { requests.pickWidget = false })
         }
     }
@@ -270,39 +273,6 @@ private fun SuggestionsCard(apps: List<AppEntry>, loading: Boolean, onLaunch: (A
                 }
             }
             repeat(4 - apps.size) { Spacer(Modifier.weight(1f)) }
-        }
-    }
-}
-
-/**
- * Today's wallpaper photo: when it was taken, and three buttons. Dislike swaps it at once and it never comes back,
- * the arrows put a new one on, the heart makes it come back more often.
- */
-@Composable
-private fun WallpaperCard() {
-    val context = LocalContext.current
-    val current by Wallpapers.current.collectAsStateWithLifecycle()
-    val changing by Wallpapers.changing.collectAsStateWithLifecycle()
-    Row(Modifier.fillMaxWidth().glass().padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text("WALLPAPER", color = EmberColors.Secondary, style = MaterialTheme.typography.labelMedium)
-            val taken = current?.takenAt?.takeIf { it > 0 }
-            Text(when {
-                changing -> "Finding a photo…"
-                taken != null -> SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(taken))
-                else -> "From your photos"
-            }, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-        }
-        IconButton({ Wallpapers.dislike(context) }, enabled = !changing) {
-            Icon(Icons.Rounded.ThumbDown, "Don't show this photo again", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        IconButton({ Wallpapers.changeNow(context) }, enabled = !changing) {
-            if (changing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Rounded.Refresh, "New photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        IconButton({ Wallpapers.like() }, enabled = current != null && !changing) {
-            Icon(if (current?.liked == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                if (current?.liked == true) "Liked" else "Like", tint = if (current?.liked == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

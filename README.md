@@ -6,7 +6,10 @@ banners.
 - **Home** is a Today page: the day and date, a **Smart Stack** and your widgets. The Smart Stack holds widgets from your
   apps (news, Reddit, weather, calendar, mail and others; whatever widgets your apps offer) and flips to the next every 5,
   7 or 10 seconds while Home is on screen. "Pick for me" fills it with the best widget from each app, skipping search bars and
-  shortcuts; swipe sideways to flip by hand. App Suggestions can be one of its cards.
+  shortcuts; swipe sideways to flip by hand. Besides widgets it has Ember's own cards: Weather, People (recent chats, starred contacts),
+  Now playing, Up next (calendar), App suggestions, and app feeds built from apps' notifications (new YouTube videos,
+  Reddit replies, Instagram, news), which work even for apps without widgets. The pencil under the stack chooses and
+  orders them; a card asks for its permission only when you switch it on.
 - **Wallpapers from your photos** (Settings › Wallpaper): every 30 minutes or three times a day, Ember picks one of your
   camera photos, preferring sharp ones and portrait-mode shots with a blurred background, and crops it around the
   subject. 👎 swaps it at once and it never returns, ↻ puts a new one on, ♥ makes it come back more often. Timed changes
@@ -14,7 +17,8 @@ banners.
 - **The rail** on the right shows the time and an icon for each thing that's on: Wi-Fi, mobile signal, VPN,
   Bluetooth, airplane mode, Do Not Disturb, silent/vibrate, location, power saving and battery. Swipe any icon sideways
   to hide it; Settings brings it back. The orange notification count opens to show which apps have notifications.
-  Below it, a four-app dock (hold a place to change its app).
+  Below it, the dock: as many apps as you like, filling the room left (it scrolls, with an arrow, when the capsule above
+  grows). Hold an app to change, move or remove it. At the bottom, the wallpaper buttons: ♥, new photo, 👎.
 - **Swipe up** for the app drawer: every app A to Z (the keyboard opens so you can type straight away) or, one swipe
   across, the same apps in groups. Pull it down to close.
 - **Widgets**: hold Home › Add widget. Edit Home to move, resize or remove them.
@@ -44,7 +48,8 @@ Made for the Galaxy S23 Ultra, works on any phone with Android 12 or later.
 
 ## Privacy
 
-Ember has no internet permission. Notifications, app usage and settings never leave the phone. It asks for:
+Notifications, photos, app usage and settings never leave the phone. The only network use is the Weather card, if you add
+it: it sends a rounded location (or the city you chose) to Open-Meteo for the forecast. It asks for:
 
 | Permission | Why |
 |---|---|
@@ -54,6 +59,10 @@ Ember has no internet permission. Notifications, app usage and settings never le
 | Network state | The Wi-Fi, mobile and VPN icons |
 | Request delete packages | Uninstall from the drawer; Android always asks first |
 | Photos (read only) | Choosing wallpapers from your camera photos; they're analysed on the phone and never leave it |
+| Internet | Only the Weather card's forecast (Open-Meteo) |
+| Approximate location (optional) | The forecast for where you are; choose a city instead to skip it |
+| Contacts (optional) | Starred contacts on the People card |
+| Calendar (optional) | The Up next card |
 | Set wallpaper | Putting the chosen photo on Home and the lock screen |
 | Wake lock, turn screen on | The lock-screen light: waking the screen, keeping it on while it glows, the pocket sensor |
 

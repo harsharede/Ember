@@ -73,6 +73,7 @@ class HomeActivity : ComponentActivity() {
         resumed = true
         Wallpapers.onHomeVisible(this)
         Widgets.nudge(this)
+        CardData.refresh(this)
     }
     override fun onPause() { super.onPause(); resumed = false }
 

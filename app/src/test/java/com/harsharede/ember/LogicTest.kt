@@ -93,4 +93,19 @@ class LogicTest {
         assertTrue(youtubeSearch < 4)   // left out of "pick for me"
         assertTrue(clock < 4)
     }
+
+    @Test fun `weather codes read as words`() {
+        assertEquals("Clear", weatherLabel(0)); assertEquals("Rain", weatherLabel(63)); assertEquals("Thunderstorm", weatherLabel(95))
+        assertEquals("—", weatherLabel(42))
+    }
+
+    @Test fun `recent people come from chats, newest first, one per person and app`() {
+        fun post(key: String, pkg: String, who: String, time: Long, chat: Boolean = true) =
+            FeedPost(key, pkg, who, "hi", time, null, null, null, chat)
+        val posts = mapOf(
+            "com.whatsapp" to listOf(post("1", "com.whatsapp", "Asha", 300), post("2", "com.whatsapp", "asha", 100), post("3", "com.whatsapp", "Ravi", 200)),
+            "com.google.android.youtube" to listOf(post("4", "com.google.android.youtube", "New video", 400, chat = false)),
+        )
+        assertEquals(listOf("Asha", "Ravi"), recentPeople(posts).map { it.name })
+    }
 }

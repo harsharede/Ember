@@ -133,7 +133,7 @@ object Widgets {
         val target = pending?.second ?: Target.HOME
         pending = null
         val prefs = EmberApp.instance.prefs
-        if (target == Target.STACK) prefs.addStackWidget(id)
+        if (target == Target.STACK) prefs.addStackItem("widget:$id")
         else {
             val info = manager.getAppWidgetInfo(id)
             // Start at the height the widget asks for, within reason; it can be made taller or shorter in edit mode.
@@ -151,7 +151,7 @@ object Widgets {
 
     fun remove(id: Int) {
         EmberApp.instance.prefs.removeWidget(id)
-        EmberApp.instance.prefs.removeStackWidget(id)
+        EmberApp.instance.prefs.removeStackItem("widget:$id")
         runCatching { host.deleteAppWidgetId(id) }
     }
 
@@ -165,7 +165,7 @@ object Widgets {
         lastNudge = now
         val prefs = EmberApp.instance.prefs
         val me = android.os.Process.myUserHandle()
-        (prefs.stackWidgets.value + prefs.widgets.value.map { it.id }).distinct().forEach { id ->
+        (prefs.stackWidgetIds + prefs.widgets.value.map { it.id }).distinct().forEach { id ->
             val info = runCatching { manager.getAppWidgetInfo(id) }.getOrNull() ?: return@forEach
             if (info.profile != me) return@forEach
             runCatching {
