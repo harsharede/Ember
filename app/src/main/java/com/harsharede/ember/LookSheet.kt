@@ -18,6 +18,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,7 +50,7 @@ fun LookSheet(onClose: () -> Unit) {
     val headerWeather by prefs.headerWeather.collectAsStateWithLifecycle()
     val place by prefs.weatherPlace.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
-    var askPlace by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var askPlace by remember { mutableStateOf(false) }
     val location = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) { prefs.setWeatherPlace(null); WeatherStore.refresh(context, force = true) }
