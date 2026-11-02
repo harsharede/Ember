@@ -16,6 +16,8 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- Where a wallpaper photo was taken (Android hides photos' GPS without it); read on the phone, named by Android's geocoder. -->
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <!-- Smart Stack cards, each asked for only when that card is switched on:
          internet for the weather card (Open-Meteo) and nothing else; approximate location for its forecast (or pick a city);
          contacts for starred people; calendar for Up next. -->

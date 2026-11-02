@@ -56,4 +56,12 @@ class PhotoScoreTest {
         assertEquals(30 * 60_000L, Wallpapers.delayToNextSlot(at(13, 30)))
         assertEquals(10 * hour, Wallpapers.delayToNextSlot(at(22, 0)))
     }
+
+    @Test fun `place names read local first, without repeats or street numbers`() {
+        assertEquals("Page, Arizona, United States", placeName(null, "Page", "Arizona", "United States"))
+        assertEquals("Indiranagar, Bengaluru, Karnataka", placeName("Indiranagar", "Bengaluru", "Karnataka", "India"))
+        assertEquals("Singapore", placeName(null, "Singapore", "Singapore", "singapore"))
+        assertEquals("Paris, France", placeName("12", "Paris", null, "France"))
+        assertEquals(null, placeName(null, null, null, null))
+    }
 }

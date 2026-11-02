@@ -12,8 +12,8 @@ android {
         applicationId = "com.harsharede.ember"
         minSdk = 31
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.6.0"
+        versionCode = 8
+        versionName = "0.6.1"
     }
 
     signingConfigs {
@@ -65,6 +65,8 @@ dependencies {
     implementation(libs.androidx.profileinstaller)
     // The wallpaper timer: survives restarts and lets Android pick a battery-friendly moment.
     implementation(libs.androidx.work.runtime)
+    // Reads where a wallpaper photo was taken.
+    implementation(libs.androidx.exifinterface)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

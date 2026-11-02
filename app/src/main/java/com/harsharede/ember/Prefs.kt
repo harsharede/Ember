@@ -132,6 +132,10 @@ class Prefs(context: Context) {
     val wallpaperPhoto: StateFlow<Long> = _wallpaperPhoto.asStateFlow()
     private val _wallpaperTakenAt = MutableStateFlow(sp.getLong(KEY_WP_TAKEN, 0L))
     val wallpaperTakenAt: StateFlow<Long> = _wallpaperTakenAt.asStateFlow()
+    private val _wallpaperPlace = MutableStateFlow(sp.getString(KEY_WP_PLACE, null))
+    /** Where the wallpaper photo was taken, if known. */
+    val wallpaperPlace: StateFlow<String?> = _wallpaperPlace.asStateFlow()
+    fun setWallpaperPlace(place: String?) { _wallpaperPlace.value = place; sp.edit().putString(KEY_WP_PLACE, place).apply() }
     private val _liked = MutableStateFlow(readIds(KEY_WP_LIKED))
     val likedPhotos: StateFlow<Set<Long>> = _liked.asStateFlow()
     private val _disliked = MutableStateFlow(readIds(KEY_WP_DISLIKED))
@@ -267,6 +271,7 @@ class Prefs(context: Context) {
         private const val KEY_WP_LIKED = "wp_liked"
         private const val KEY_WP_DISLIKED = "wp_disliked"
         private const val KEY_WP_RECENT = "wp_recent"
+        private const val KEY_WP_PLACE = "wp_place"
         private const val KEY_LIGHT_MINUTES = "light_minutes"
         private const val KEY_LIGHT_ICON = "light_icon"
         private const val KEY_LIGHT_BRIGHTNESS = "light_brightness"

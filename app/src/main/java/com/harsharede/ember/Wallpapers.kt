@@ -7,6 +7,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
+import android.location.Geocoder
+import androidx.exifinterface.media.ExifInterface
+import java.util.Locale
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Build
@@ -46,7 +49,9 @@ object Wallpapers {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
 
-    data class Current(val id: Long, val takenAt: Long, val liked: Boolean)
+    data class Current(val id: Long, val takenAt: Long, val liked: Boolean, val place: String? = null) {
+        val uri: Uri get() = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+    }
 
     private val _current = MutableStateFlow<Current?>(null)
     /** The photo on the wallpaper now, if Ember put it there. */
@@ -62,8 +67,10 @@ object Wallpapers {
     fun init(context: Context) {
         val prefs = EmberApp.instance.prefs
         val id = prefs.wallpaperPhoto.value
-        if (id > 0) _current.value = Current(id, prefs.wallpaperTakenAt.value, id in prefs.likedPhotos.value)
+        if (id > 0) _current.value = Current(id, prefs.wallpaperTakenAt.value, id in prefs.likedPhotos.value, prefs.wallpaperPlace.value)
         schedule(context, restart = false)
+        // A wallpaper from before places were shown: look its place up once.
+        if (id > 0 && prefs.wallpaperPlace.value == null) lookUpPlace(context)
     }
 
     fun hasPhotoAccess(context: Context): Boolean {
@@ -74,9 +81,37 @@ object Wallpapers {
     }
 
     fun photoPermissions(): Array<String> = when {
-        Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-        Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
-        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED, Manifest.permission.ACCESS_MEDIA_LOCATION)
+        Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.ACCESS_MEDIA_LOCATION)
+        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.ACCESS_MEDIA_LOCATION)
+    }
+
+    /** Android hides where a photo was taken unless this is allowed. */
+    fun hasPlaceAccess(context: Context) = context.checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    /** After the place permission is granted: name the current photo's place. */
+    fun lookUpPlace(context: Context) {
+        val app = context.applicationContext
+        scope.launch(Dispatchers.IO) {
+            val now = _current.value ?: return@launch
+            val place = runCatching { placeOf(app, now.uri) }.getOrNull() ?: return@launch
+            EmberApp.instance.prefs.setWallpaperPlace(place)
+            if (_current.value?.id == now.id) _current.value = _current.value?.copy(place = place)
+        }
+    }
+
+    /**
+     * Where a photo was taken, as a place name ("Page, Arizona, United States"): the GPS position in the photo, named by
+     * Android's geocoder. Null without the permission, without a position in the photo, or without a name for it.
+     */
+    private fun placeOf(context: Context, uri: Uri): String? {
+        if (!hasPlaceAccess(context) || !Geocoder.isPresent()) return null
+        val original = MediaStore.setRequireOriginal(uri)
+        val latLong = context.contentResolver.openInputStream(original)?.use { ExifInterface(it).latLong } ?: return null
+        if (latLong[0] == 0.0 && latLong[1] == 0.0) return null
+        @Suppress("DEPRECATION")
+        val a = Geocoder(context, Locale.getDefault()).getFromLocation(latLong[0], latLong[1], 1)?.firstOrNull() ?: return null
+        return placeName(a.subLocality, a.locality ?: a.subAdminArea, a.adminArea, a.countryName)
     }
 
     /** (Re)start the timer after a settings change: every 30 minutes, or morning, afternoon and evening. */
@@ -157,9 +192,11 @@ object Wallpapers {
         val which = if (prefs.wallpaperLock.value) WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK else WallpaperManager.FLAG_SYSTEM
         WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, which)
         bitmap.recycle()
+        val place = runCatching { placeOf(context, pick.uri) }.getOrNull()
         prefs.setWallpaperPhoto(pick.id, pick.takenAt)
+        prefs.setWallpaperPlace(place)
         prefs.addRecentPhoto(pick.id, keep = (known.size / 3).coerceIn(1, 60))
-        _current.value = Current(pick.id, pick.takenAt, pick.id in liked)
+        _current.value = Current(pick.id, pick.takenAt, pick.id in liked, place)
     }
 
     private data class Photo(val id: Long, val width: Int, val height: Int, val takenAt: Long) {
@@ -276,3 +313,8 @@ class WallpaperWorker(context: Context, params: WorkerParameters) : CoroutineWor
         return Result.success()
     }
 }
+
+/** "Page, Arizona, United States": the most local name first, no repeats, at most three parts. */
+fun placeName(vararg parts: String?): String? =
+    parts.filterNotNull().map { it.trim() }.filter { it.isNotEmpty() && !it.first().isDigit() }
+        .distinctBy { it.lowercase() }.take(3).joinToString(", ").ifEmpty { null }

@@ -18,7 +18,8 @@ banners.
   Bluetooth, airplane mode, Do Not Disturb, silent/vibrate, location, power saving and battery. Swipe any icon sideways
   to hide it; Settings brings it back. The orange notification count opens to show which apps have notifications.
   Below it, the dock: as many apps as you like, filling the room left (it scrolls, with an arrow, when the capsule above
-  grows). Hold an app to change, move or remove it. At the bottom, the wallpaper buttons: ♥, new photo, 👎.
+  grows). Hold an app to change, move or remove it. At the bottom, the wallpaper strip: where and when the photo was taken (scrolling past; tap to open the photo), then
+  ♥, new photo, 👎.
 - **Swipe up** for the app drawer: every app A to Z (the keyboard opens so you can type straight away) or, one swipe
   across, the same apps in groups. Pull it down to close.
 - **Widgets**: hold Home › Add widget. Edit Home to move, resize or remove them.
@@ -63,6 +64,7 @@ it: it sends a rounded location (or the city you chose) to Open-Meteo for the fo
 | Approximate location (optional) | The forecast for where you are; choose a city instead to skip it |
 | Contacts (optional) | Starred contacts on the People card |
 | Calendar (optional) | The Up next card |
+| Photo locations (optional) | Naming where the wallpaper photo was taken, from the photo's own GPS data |
 | Set wallpaper | Putting the chosen photo on Home and the lock screen |
 | Wake lock, turn screen on | The lock-screen light: waking the screen, keeping it on while it glows, the pocket sensor |
 

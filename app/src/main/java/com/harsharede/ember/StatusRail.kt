@@ -28,6 +28,10 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material.icons.rounded.ThumbDown
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -252,14 +256,52 @@ private fun MoreArrow(icon: ImageVector, modifier: Modifier) {
     }
 }
 
-/** The wallpaper buttons as a small dock under the apps: dislike (swap now, never again), new photo, like. */
+/**
+ * The wallpaper buttons as a small dock under the apps: where and when the photo was taken (scrolling past, a couple
+ * of times after each new photo and each return to Home, then still), then like, new photo and dislike.
+ */
 @Composable
 fun WallpaperDock(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val current by Wallpapers.current.collectAsStateWithLifecycle()
     val changing by Wallpapers.changing.collectAsStateWithLifecycle()
     val liked = current?.liked == true
+    var hasPlaceAccess by remember { mutableStateOf(Wallpapers.hasPlaceAccess(context)) }
+    val placeAccess = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+        hasPlaceAccess = ok
+        if (ok) Wallpapers.lookUpPlace(context)
+    }
+    var shown by remember { mutableIntStateOf(0) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { shown++ }
+    val line = remember(current, changing, hasPlaceAccess) {
+        val c = current
+        val date = c?.takenAt?.takeIf { it > 0 }?.let { SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(it)) }
+        when {
+            changing -> "Finding a photo…"
+            c == null -> "From your photos"
+            c.place != null -> listOfNotNull(c.place, date).joinToString("  ·  ")
+            !hasPlaceAccess -> listOfNotNull(date, "Tap to show where").joinToString("  ·  ")
+            else -> date ?: "From your photos"
+        }
+    }
     Column(modifier.glass(RoundedCornerShape(36.dp)).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).clickable {
+            val c = current
+            when {
+                c != null && c.place == null && !hasPlaceAccess -> placeAccess.launch(android.Manifest.permission.ACCESS_MEDIA_LOCATION)
+                c != null -> runCatching {
+                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(c.uri, "image/*")
+                        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
+        }.padding(start = 10.dp, end = 6.dp, top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Place, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+            key(line, shown) {
+                Text(line, fontSize = 12.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 3.dp).basicMarquee(iterations = 2, repeatDelayMillis = 1500, initialDelayMillis = 800))
+            }
+        }
         IconButton({ Wallpapers.like() }, enabled = current != null && !changing) {
             Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Liked" else "Like this wallpaper",
                 tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
