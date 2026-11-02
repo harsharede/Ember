@@ -82,4 +82,15 @@ class LogicTest {
         assertEquals(1, lightColor(0xFF101010.toInt(), fallback = 1))  // too dark to see
         assertEquals(1, lightColor(0, fallback = 1))                    // app set none
     }
+
+    @Test fun `smart stack prefers feeds over search bars and tiny widgets`() {
+        val news = stackScore("com.google.android.apps.magazines", "Headlines", 250, 180)
+        val reddit = stackScore("com.reddit.frontpage", "Popular posts", 250, 180)
+        val youtubeSearch = stackScore("com.google.android.youtube", "Search", 250, 40)
+        val clock = stackScore("com.sec.android.app.clockpackage", "Digital clock", 180, 100)
+        assertTrue(news > reddit)
+        assertTrue(reddit > youtubeSearch)
+        assertTrue(youtubeSearch < 4)   // left out of "pick for me"
+        assertTrue(clock < 4)
+    }
 }

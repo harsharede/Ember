@@ -3,7 +3,10 @@
 A calm Android launcher. One Home screen, a status rail instead of a status bar, and a notification light instead of
 banners.
 
-- **Home** is a Today page: the day and date, Suggestions (the apps you open most, recent use counting most) and your widgets.
+- **Home** is a Today page: the day and date, a **Smart Stack** and your widgets. The Smart Stack holds widgets from your
+  apps (news, Reddit, weather, calendar, mail and others; whatever widgets your apps offer) and flips to the next every 5,
+  7 or 10 seconds while Home is on screen. "Pick for me" fills it with the best widget from each app, skipping search bars and
+  shortcuts; swipe sideways to flip by hand. App Suggestions can be one of its cards.
 - **Wallpapers from your photos** (Settings › Wallpaper): every 30 minutes or three times a day, Ember picks one of your
   camera photos, preferring sharp ones and portrait-mode shots with a blurred background, and crops it around the
   subject. 👎 swaps it at once and it never returns, ↻ puts a new one on, ♥ makes it come back more often. Timed changes

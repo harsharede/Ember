@@ -80,12 +80,14 @@ import java.util.Locale
 class HomeRequests {
     var closeAll by mutableIntStateOf(0)
     var pickWidget by mutableStateOf(false)
+    /** Where the widget being picked goes. */
+    var pickTarget by mutableStateOf(Widgets.Target.HOME)
     /** Open the notification page (from the lock-screen light's swipe up). */
     var openNotifications by mutableIntStateOf(0)
 }
 
 @Composable
-fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidgetProviderInfo) -> Unit) {
+fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidgetProviderInfo, Widgets.Target) -> Unit, onAutoPick: () -> Unit) {
     val context = LocalContext.current
     val app = EmberApp.instance
     val apps by app.apps.apps.collectAsStateWithLifecycle()
@@ -96,6 +98,8 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val rotating by app.prefs.wallpaperRotate.collectAsStateWithLifecycle()
     val showWallpaperButtons by app.prefs.wallpaperCard.collectAsStateWithLifecycle()
     val wallpaperCard = rotating && showWallpaperButtons
+    val stackIds by app.prefs.stackWidgets.collectAsStateWithLifecycle()
+    val stackSuggestions by app.prefs.stackSuggestions.collectAsStateWithLifecycle()
     val notifications by NotificationStore.items.collectAsStateWithLifecycle()
     val connected by NotificationStore.connected.collectAsStateWithLifecycle()
     val status by rememberDeviceStatus()
@@ -171,13 +175,18 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                     val columnWidth = maxWidth.value.toInt()
                     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
                         item("date") { DateHeader(now) }
-                        item("suggestions") { SuggestionsCard(suggestions, apps.isEmpty(), launch) }
+                        item("stack") {
+                            SmartStackCard(columnWidth, active = !drawerShown && !notesShown, editing = editing,
+                                suggestions = if (stackSuggestions || stackIds.isEmpty()) ({ SuggestionsCard(suggestions, apps.isEmpty(), launch) }) else null,
+                                onAutoPick = onAutoPick,
+                                onAdd = { requests.pickTarget = Widgets.Target.STACK; requests.pickWidget = true })
+                        }
                         if (wallpaperCard) item("wallpaper") { WallpaperCard() }
                         if (!connected) item("access") { AccessCard() }
                         items(widgets, key = { "w${it.id}" }) { widget -> HomeWidgetView(widget, editing, columnWidth) }
                         if (editing) item("edit-actions") {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilledTonalButton({ requests.pickWidget = true }) { Text("Add widget") }
+                                FilledTonalButton({ requests.pickTarget = Widgets.Target.HOME; requests.pickWidget = true }) { Text("Add widget") }
                                 FilledTonalButton({ editing = false }) { Text("Done") }
                             }
                         }
@@ -195,7 +204,8 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             }
             Box(Modifier.align(Alignment.Center)) {
                 DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem({ Text("Add widget") }, { menu = false; requests.pickWidget = true })
+                    DropdownMenuItem({ Text("Add widget") }, { menu = false; requests.pickTarget = Widgets.Target.HOME; requests.pickWidget = true })
+                    DropdownMenuItem({ Text("Fill Smart Stack for me") }, { menu = false; onAutoPick() })
                     DropdownMenuItem({ Text(if (editing) "Done editing" else "Edit Home") }, { menu = false; editing = !editing })
                     DropdownMenuItem({ Text("Wallpaper") }, { menu = false
                         runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper")) } })
@@ -226,7 +236,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                 onClose = { pickDockSlot = null })
         }
         AnimatedVisibility(requests.pickWidget, enter = fadeIn(), exit = fadeOut()) {
-            WidgetPicker(onPick = { info -> requests.pickWidget = false; editing = true; onAddWidget(info) },
+            WidgetPicker(onPick = { info -> requests.pickWidget = false; editing = true; onAddWidget(info, requests.pickTarget) },
                 onClose = { requests.pickWidget = false })
         }
     }

@@ -53,6 +53,25 @@ class Prefs(context: Context) {
 
     data class HomeWidget(val id: Int, val heightDp: Int)
 
+    // The Smart Stack: widgets in one card that flips to the next every few seconds.
+    private val _stack = MutableStateFlow(sp.getString(KEY_STACK, null).orEmpty().split(',').mapNotNull { it.toIntOrNull() })
+    val stackWidgets: StateFlow<List<Int>> = _stack.asStateFlow()
+    private val _stackHeight = MutableStateFlow(sp.getInt(KEY_STACK_HEIGHT, 190))
+    val stackHeight: StateFlow<Int> = _stackHeight.asStateFlow()
+    private val _stackSeconds = MutableStateFlow(sp.getInt(KEY_STACK_SECONDS, 7))
+    /** Seconds on each widget before the stack moves on (only while Home is on screen). */
+    val stackSeconds: StateFlow<Int> = _stackSeconds.asStateFlow()
+    private val _stackSuggestions = MutableStateFlow(sp.getBoolean(KEY_STACK_SUGGESTIONS, false))
+    /** Keep app Suggestions as one page of the stack. */
+    val stackSuggestions: StateFlow<Boolean> = _stackSuggestions.asStateFlow()
+
+    fun addStackWidget(id: Int) = saveStack(_stack.value.filter { it != id } + id)
+    fun removeStackWidget(id: Int) { if (id in _stack.value) saveStack(_stack.value - id) }
+    private fun saveStack(list: List<Int>) { _stack.value = list; sp.edit().putString(KEY_STACK, list.joinToString(",")).apply() }
+    fun setStackHeight(dp: Int) { _stackHeight.value = dp; sp.edit().putInt(KEY_STACK_HEIGHT, dp).apply() }
+    fun setStackSeconds(s: Int) { _stackSeconds.value = s; sp.edit().putInt(KEY_STACK_SECONDS, s).apply() }
+    fun setStackSuggestions(on: Boolean) { _stackSuggestions.value = on; sp.edit().putBoolean(KEY_STACK_SUGGESTIONS, on).apply() }
+
     private val _light = MutableStateFlow(sp.getBoolean(KEY_LIGHT, true))
     /** The lock-screen light: wake the screen black with a glowing pill when something arrives with the screen off. */
     val lightEnabled: StateFlow<Boolean> = _light.asStateFlow()
@@ -203,6 +222,10 @@ class Prefs(context: Context) {
         private const val KEY_PERSISTENT = "show_persistent"
         private const val KEY_WIDGETS = "widgets"
         private const val KEY_LIGHT = "light"
+        private const val KEY_STACK = "stack"
+        private const val KEY_STACK_HEIGHT = "stack_height"
+        private const val KEY_STACK_SECONDS = "stack_seconds"
+        private const val KEY_STACK_SUGGESTIONS = "stack_suggestions"
         private const val KEY_WP_ROTATE = "wp_rotate"
         private const val KEY_WP_EVERY = "wp_every"
         private const val KEY_WP_LOCK = "wp_lock"

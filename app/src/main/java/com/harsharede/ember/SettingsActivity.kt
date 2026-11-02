@@ -117,6 +117,8 @@ class SettingsActivity : ComponentActivity() {
         val wpLock by prefs.wallpaperLock.collectAsStateWithLifecycle()
         val cameraOnly by prefs.wallpaperCameraOnly.collectAsStateWithLifecycle()
         val wpCard by prefs.wallpaperCard.collectAsStateWithLifecycle()
+        val stackSeconds by prefs.stackSeconds.collectAsStateWithLifecycle()
+        val stackSuggestions by prefs.stackSuggestions.collectAsStateWithLifecycle()
         val isHome = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
         val hasAccess = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
         val canOverlay = Settings.canDrawOverlays(this)
@@ -158,6 +160,14 @@ class SettingsActivity : ComponentActivity() {
                         if (!canOverlay) Text("Needs \"Display over other apps\" (above) to wake the screen.", color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     }
+                }
+
+                Group("Smart Stack") {
+                    Choice("Next widget every", listOf(5 to "5 s", 7 to "7 s", 10 to "10 s"), stackSeconds) { prefs.setStackSeconds(it) }
+                    Toggle("Include app suggestions", "Keep Suggestions as one card in the stack", stackSuggestions) { prefs.setStackSuggestions(it) }
+                    Text("It only moves while Home is on screen, and pauses for a few seconds after you touch it. " +
+                        "Fill it from Home: hold an empty spot › Fill Smart Stack for me, or Edit Home.", color = EmberColors.Secondary,
+                        style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                 }
 
                 Group("Wallpaper") {

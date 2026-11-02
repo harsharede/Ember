@@ -71,21 +71,35 @@ object Widgets {
     const val REQUEST_BIND = 4101
     const val REQUEST_CONFIGURE = 4102
 
+    /** Where a new widget goes: the free list on Home, or the Smart Stack. */
+    enum class Target { HOME, STACK }
+
     lateinit var host: AppWidgetHost
         private set
     lateinit var manager: AppWidgetManager
         private set
-    private var pendingId = -1
+    private val queue = ArrayDeque<Pair<AppWidgetProviderInfo, Target>>()
+    private var pending: Pair<Int, Target>? = null
+    private var lastNudge = 0L
 
     fun init(context: Context) {
         manager = AppWidgetManager.getInstance(context)
         host = AppWidgetHost(context, HOST_ID)
     }
 
-    /** Start adding [info]: bind it, then configure it, then put it on Home. Results come back to [onResult]. */
-    fun add(activity: Activity, info: AppWidgetProviderInfo) {
+    /** Add [info]: bind it (Android asks the first time), run its setup screen if it has one, then place it. */
+    fun add(activity: Activity, info: AppWidgetProviderInfo, target: Target = Target.HOME) = addAll(activity, listOf(info), target)
+
+    /** Add several, one after another (the Smart Stack's "pick for me"). */
+    fun addAll(activity: Activity, infos: List<AppWidgetProviderInfo>, target: Target) {
+        infos.forEach { queue.addLast(it to target) }
+        if (pending == null) next(activity)
+    }
+
+    private fun next(activity: Activity) {
+        val (info, target) = queue.removeFirstOrNull() ?: return
         val id = host.allocateAppWidgetId()
-        pendingId = id
+        pending = id to target
         if (manager.bindAppWidgetIdIfAllowed(id, info.profile, info.provider, null)) configure(activity, id, info)
         else runCatching {
             @Suppress("DEPRECATION")
@@ -93,59 +107,96 @@ object Widgets {
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, info.profile), REQUEST_BIND)
-        }.onFailure { cancel(id) }
+        }.onFailure { cancel(activity, id, stopQueue = false) }
     }
 
     fun onResult(activity: Activity, requestCode: Int, resultCode: Int) {
-        val id = pendingId
-        if (id < 0) return
+        val (id, _) = pending ?: return
         when (requestCode) {
             REQUEST_BIND -> {
                 val info = manager.getAppWidgetInfo(id)
-                if (resultCode == Activity.RESULT_OK && info != null) configure(activity, id, info) else cancel(id)
+                // Said no to Android's question: don't ask again for the rest of the batch.
+                if (resultCode == Activity.RESULT_OK && info != null) configure(activity, id, info) else cancel(activity, id, stopQueue = true)
             }
-            REQUEST_CONFIGURE -> if (resultCode == Activity.RESULT_OK) place(id) else cancel(id)
+            REQUEST_CONFIGURE -> if (resultCode == Activity.RESULT_OK) place(activity, id) else cancel(activity, id, stopQueue = false)
         }
     }
 
     private fun configure(activity: Activity, id: Int, info: AppWidgetProviderInfo) {
         val optional = info.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL != 0
-        if (info.configure == null || optional) { place(id); return }
+        if (info.configure == null || optional) { place(activity, id); return }
         runCatching { host.startAppWidgetConfigureActivityForResult(activity, id, 0, REQUEST_CONFIGURE, null) }
-            .onFailure { place(id) }
+            .onFailure { place(activity, id) }
     }
 
-    private fun place(id: Int) {
-        pendingId = -1
-        val info = manager.getAppWidgetInfo(id)
-        // Start at the height the widget asks for, within reason; it can be made taller or shorter in edit mode.
-        val dp = info?.minHeight?.let { px -> (px / EmberApp.instance.resources.displayMetrics.density).toInt() } ?: 160
-        EmberApp.instance.prefs.addWidget(Prefs.HomeWidget(id, dp.coerceIn(90, 420)))
+    private fun place(activity: Activity, id: Int) {
+        val target = pending?.second ?: Target.HOME
+        pending = null
+        val prefs = EmberApp.instance.prefs
+        if (target == Target.STACK) prefs.addStackWidget(id)
+        else {
+            val info = manager.getAppWidgetInfo(id)
+            // Start at the height the widget asks for, within reason; it can be made taller or shorter in edit mode.
+            val dp = info?.minHeight?.let { px -> (px / EmberApp.instance.resources.displayMetrics.density).toInt() } ?: 160
+            prefs.addWidget(Prefs.HomeWidget(id, dp.coerceIn(90, 420)))
+        }
+        next(activity)
     }
 
-    private fun cancel(id: Int) { pendingId = -1; runCatching { host.deleteAppWidgetId(id) } }
+    private fun cancel(activity: Activity, id: Int, stopQueue: Boolean) {
+        pending = null
+        runCatching { host.deleteAppWidgetId(id) }
+        if (stopQueue) queue.clear() else next(activity)
+    }
 
     fun remove(id: Int) {
         EmberApp.instance.prefs.removeWidget(id)
+        EmberApp.instance.prefs.removeStackWidget(id)
         runCatching { host.deleteAppWidgetId(id) }
+    }
+
+    /**
+     * Ask Ember's widgets to refresh, when Home comes back and it's been a while. Each app still decides what to fetch;
+     * this only spares a stale headline from waiting for the app's own timer.
+     */
+    fun nudge(context: Context) {
+        val now = System.currentTimeMillis()
+        if (now - lastNudge < 10 * 60_000L) return
+        lastNudge = now
+        val prefs = EmberApp.instance.prefs
+        val me = android.os.Process.myUserHandle()
+        (prefs.stackWidgets.value + prefs.widgets.value.map { it.id }).distinct().forEach { id ->
+            val info = runCatching { manager.getAppWidgetInfo(id) }.getOrNull() ?: return@forEach
+            if (info.profile != me) return@forEach
+            runCatching {
+                context.sendBroadcast(Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).setComponent(info.provider)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(id)))
+            }
+        }
+    }
+}
+
+/** A bound widget, drawn at [widthDp] × [heightDp] (and told that size, so it can choose its layout). */
+@Composable
+fun WidgetFrame(id: Int, widthDp: Int, heightDp: Int, modifier: Modifier = Modifier) {
+    val info = remember(id) { runCatching { Widgets.manager.getAppWidgetInfo(id) }.getOrNull() }
+    Box(modifier.fillMaxWidth().height(heightDp.dp).clip(RoundedCornerShape(28.dp))) {
+        if (info == null) Box(Modifier.fillMaxSize().glass(), contentAlignment = Alignment.Center) {
+            Text("This widget's app was removed", color = EmberColors.Secondary)
+        } else AndroidView(
+            factory = { ctx -> Widgets.host.createView(ctx.applicationContext, id, info).apply { setPadding(0, 0, 0, 0) } },
+            update = { view -> resize(view, widthDp, heightDp) },
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
 /** One widget on Home. In edit mode it shows controls to move, resize and remove it. */
 @Composable
 fun HomeWidgetView(widget: Prefs.HomeWidget, editing: Boolean, widthDp: Int, modifier: Modifier = Modifier) {
-    val info = remember(widget.id) { Widgets.manager.getAppWidgetInfo(widget.id) }
     val prefs = EmberApp.instance.prefs
     Column(modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(widget.heightDp.dp).clip(RoundedCornerShape(28.dp))) {
-            if (info == null) Box(Modifier.fillMaxSize().glass(), contentAlignment = Alignment.Center) {
-                Text("This widget's app was removed", color = EmberColors.Secondary)
-            } else AndroidView(
-                factory = { ctx -> Widgets.host.createView(ctx.applicationContext, widget.id, info).apply { setPadding(0, 0, 0, 0) } },
-                update = { view -> resize(view, widthDp, widget.heightDp) },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        WidgetFrame(widget.id, widthDp, widget.heightDp)
         if (editing) Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
             FilledTonalIconButton({ prefs.moveWidget(widget.id, -1) }) { Icon(Icons.Rounded.ArrowUpward, "Move up") }
             FilledTonalIconButton({ prefs.moveWidget(widget.id, 1) }) { Icon(Icons.Rounded.ArrowDownward, "Move down") }

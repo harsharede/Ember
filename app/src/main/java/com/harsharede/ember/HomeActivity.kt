@@ -20,7 +20,12 @@ class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { EmberTheme { HomeScreen(requests, onAddWidget = { info -> Widgets.add(this, info) }) } }
+        setContent {
+            EmberTheme {
+                HomeScreen(requests, onAddWidget = { info, target -> Widgets.add(this, info, target) },
+                    onAutoPick = { SmartStack.autoPick(this, lifecycleScope) })
+            }
+        }
         if (intent?.action == ACTION_OPEN_NOTIFICATIONS) requests.openNotifications++
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -63,7 +68,12 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); resumed = true; Wallpapers.onHomeVisible(this) }
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+        Wallpapers.onHomeVisible(this)
+        Widgets.nudge(this)
+    }
     override fun onPause() { super.onPause(); resumed = false }
 
     companion object {
