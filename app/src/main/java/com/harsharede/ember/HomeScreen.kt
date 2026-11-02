@@ -245,7 +245,6 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                 }
             }
             // The wallpaper control: tiny, bottom-left.
-            if (wallpaperCard) WallpaperMini(Modifier.align(Alignment.BottomStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 14.dp, bottom = 10.dp))
             // A small handle says there's more below.
             Box(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 10.dp)
                 .clip(RoundedCornerShape(50)).clickable { drawer.show() }.padding(horizontal = 24.dp, vertical = 10.dp)) {
@@ -266,6 +265,9 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                         context.startActivity(Intent(context, SettingsActivity::class.java)) })
                 }
             }
+            // The wallpaper control: tiny, bottom-left, opening upwards. Last, so it sits above everything else on Home
+            // (the drawer handle used to cover its buttons).
+            if (wallpaperCard) WallpaperMini(Modifier.align(Alignment.BottomStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 14.dp, bottom = 10.dp))
         }
 
         // The layers stay composed, parked off screen, so they open on the first frame of a swipe with nothing to build.

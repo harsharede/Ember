@@ -4,6 +4,9 @@ package com.harsharede.ember
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
@@ -264,8 +267,9 @@ private fun MoreArrow(icon: ImageVector, modifier: Modifier) {
 }
 
 /**
- * The wallpaper control, tiny, in a corner: a small round button. Tap it and it opens into a bar with where and when
- * the photo was taken (scrolling past), like, new photo and dislike; it folds away again after a few seconds.
+ * The wallpaper control, tiny, in the bottom-left corner: a small round button. Tap it and it opens upwards (where and
+ * when the photo was taken, then like, new photo and dislike), well clear of the drawer handle in the middle; it folds
+ * away again a few seconds after the last touch.
  */
 @Composable
 fun WallpaperMini(modifier: Modifier = Modifier) {
@@ -294,42 +298,47 @@ fun WallpaperMini(modifier: Modifier = Modifier) {
             else -> date ?: "From your photos"
         }
     }
-    val small = 30.dp
-    Row(modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .55f))
-        .animateContentSize(), verticalAlignment = Alignment.CenterVertically) {
-        if (!open) {
-            Box(Modifier.size(small).clickable { open = true; touched++ }, contentAlignment = Alignment.Center) {
-                if (changing) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp)
-                else Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.Image, "Wallpaper", Modifier.size(15.dp),
-                    tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = .8f))
-            }
-        } else {
-            Row(Modifier.widthIn(max = 150.dp).clickable {
-                touched++
-                val c = current
-                when {
-                    c != null && c.place == null && !hasPlaceAccess -> placeAccess.launch(android.Manifest.permission.ACCESS_MEDIA_LOCATION)
-                    c != null -> runCatching {
-                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(c.uri, "image/*")
-                            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    val fill = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .75f)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.Start) {
+        AnimatedVisibility(open, enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.Start) {
+                Row(Modifier.widthIn(max = 180.dp).clip(RoundedCornerShape(50)).background(fill).clickable {
+                    touched++
+                    val c = current
+                    when {
+                        c != null && c.place == null && !hasPlaceAccess -> placeAccess.launch(android.Manifest.permission.ACCESS_MEDIA_LOCATION)
+                        c != null -> runCatching {
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(c.uri, "image/*")
+                                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
                     }
+                }.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Place, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
+                    Text(line, fontSize = 11.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(start = 3.dp).basicMarquee(iterations = 2, repeatDelayMillis = 1200, initialDelayMillis = 600))
                 }
-            }.padding(start = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Place, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
-                Text(line, fontSize = 11.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = 3.dp).basicMarquee(iterations = 2, repeatDelayMillis = 1200, initialDelayMillis = 600))
+                MiniButton(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Liked" else "Like this wallpaper",
+                    enabled = current != null && !changing, tint = if (liked) MaterialTheme.colorScheme.primary else null, fill = fill) { touched++; Wallpapers.like() }
+                MiniButton(Icons.Rounded.Refresh, "New wallpaper", enabled = !changing, fill = fill) { touched++; Wallpapers.changeNow(context) }
+                MiniButton(Icons.Rounded.ThumbDown, "Don't show this photo again", enabled = !changing, fill = fill) { touched++; Wallpapers.dislike(context) }
             }
-            MiniButton(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Liked" else "Like this wallpaper",
-                enabled = current != null && !changing, tint = if (liked) MaterialTheme.colorScheme.primary else null) { touched++; Wallpapers.like() }
-            MiniButton(Icons.Rounded.Refresh, "New wallpaper", enabled = !changing) { touched++; Wallpapers.changeNow(context) }
-            MiniButton(Icons.Rounded.ThumbDown, "Don't show this photo again", enabled = !changing) { touched++; Wallpapers.dislike(context) }
+        }
+        // The button itself: shows a heart when this photo is liked, a spinner while a new one is found, × while open.
+        Box(Modifier.size(34.dp).clip(CircleShape).background(fill).clickable { open = !open; touched++ }, contentAlignment = Alignment.Center) {
+            when {
+                changing -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp)
+                open -> Icon(Icons.Rounded.Close, "Close", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
+                else -> Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.Image, "Wallpaper", Modifier.size(16.dp),
+                    tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = .85f))
+            }
         }
     }
 }
 
 @Composable
-private fun MiniButton(icon: ImageVector, label: String, enabled: Boolean, tint: Color? = null, onClick: () -> Unit) {
-    Box(Modifier.size(30.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
+private fun MiniButton(icon: ImageVector, label: String, enabled: Boolean, tint: Color? = null, fill: Color = Color.Transparent, onClick: () -> Unit) {
+    Box(Modifier.size(34.dp).clip(CircleShape).background(fill).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, label, Modifier.size(16.dp), tint = (tint ?: MaterialTheme.colorScheme.onSurface).copy(alpha = if (enabled) .9f else .35f))
     }
 }
