@@ -143,6 +143,11 @@ class SettingsActivity : ComponentActivity() {
                             Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
                     }
                 }
+                Group("Animations") {
+                    Toggle("Dock icons fall into place", "When you come back to Home, the dock's icons drop into line with a bounce. Off: they just stay put.", animIcons) { prefs.setAnimIcons(it) }
+                    Toggle("Home cards fall into place", "The date, Smart Stack and widgets drop in when you come back to Home. Off: no animation.", animCards) { prefs.setAnimCards(it) }
+                }
+
                 // Android 13+ blocks notification access for apps installed from a file until this is allowed.
                 if (!hasAccess && Build.VERSION.SDK_INT >= 33) Group("Notification access greyed out?") {
                     Text("Android blocks it for apps installed from a file. Open App info, tap ⋮ (top right), choose " +
@@ -201,8 +206,6 @@ class SettingsActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     Toggle("Colours from wallpaper", "Material You: the accent and surfaces follow your wallpaper", wallpaper) { prefs.setWallpaperColors(it) }
                     Toggle("Hide Android's status bar on Home", "The rail shows the same things", hideBar) { prefs.setHideStatusBar(it) }
-                    Toggle("Dock icons fall into place", "When you come back to Home", animIcons) { prefs.setAnimIcons(it) }
-                    Toggle("Home cards fall into place", "The date, Smart Stack and widgets, when you come back to Home", animCards) { prefs.setAnimCards(it) }
                 }
 
                 Group("App drawer") {
