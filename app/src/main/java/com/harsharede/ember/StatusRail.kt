@@ -108,6 +108,7 @@ fun StatusCapsule(
     hidden: Set<String>,
     modifier: Modifier = Modifier,
     alpha: Float = .8f,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(36.dp),
     onOpenNotifications: (String?) -> Unit,
 ) {
     val context = LocalContext.current
@@ -117,7 +118,7 @@ fun StatusCapsule(
         Toast.makeText(context, "${icon.label} hidden. Bring it back in Ember settings.", Toast.LENGTH_SHORT).show()
     }
     fun shown(icon: StatusIcon) = icon.id !in hidden
-    Column(modifier.glass(RoundedCornerShape(36.dp), alpha).padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    Column(modifier.glass(shape, alpha).padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
@@ -229,10 +230,11 @@ private fun cellIcon(level: Int): ImageVector = when {
 @Composable
 fun DockColumn(apps: List<AppEntry>, modifier: Modifier = Modifier, iconSize: Dp = 52.dp, alpha: Float = .8f,
                entrance: Entrance? = null, animate: Boolean = false,
+               shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(36.dp),
                onLaunch: (AppEntry) -> Unit, onChoose: (Int) -> Unit) {
     val prefs = EmberApp.instance.prefs
     val scroll = rememberScrollState()
-    Box(modifier.glass(RoundedCornerShape(36.dp), alpha)) {
+    Box(modifier.glass(shape, alpha)) {
         Column(Modifier.verticalScroll(scroll).padding(vertical = 12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             apps.forEachIndexed { index, app ->

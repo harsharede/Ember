@@ -100,6 +100,14 @@ class Prefs(context: Context) {
     fun setCardStyle(v: Int) { _cardStyle.value = v; sp.edit().putInt(KEY_CARD_STYLE, v).apply() }
     fun setAnimIcons(on: Boolean) { _animIcons.value = on; sp.edit().putBoolean(KEY_ANIM_ICONS, on).apply() }
     fun setAnimCards(on: Boolean) { _animCards.value = on; sp.edit().putBoolean(KEY_ANIM_CARDS, on).apply() }
+    private val _dockRound = MutableStateFlow(sp.getBoolean(KEY_DOCK_ROUND, true))
+    /** The rail's capsule and dock: pill-shaped (true) or rectangles with rounded corners (false). */
+    val dockRound: StateFlow<Boolean> = _dockRound.asStateFlow()
+    private val _dockCorner = MutableStateFlow(sp.getInt(KEY_DOCK_CORNER, 18))
+    /** Corner size for the rounded rectangle, in dp. */
+    val dockCorner: StateFlow<Int> = _dockCorner.asStateFlow()
+    fun setDockRound(on: Boolean) { _dockRound.value = on; sp.edit().putBoolean(KEY_DOCK_ROUND, on).apply() }
+    fun setDockCorner(dp: Int) { _dockCorner.value = dp; sp.edit().putInt(KEY_DOCK_CORNER, dp).apply() }
     fun setRailWidth(dp: Int) { _railWidth.value = dp; sp.edit().putInt(KEY_RAIL_WIDTH, dp).apply() }
     fun setDockHeight(f: Float) { _dockHeight.value = f; sp.edit().putFloat(KEY_DOCK_HEIGHT, f).apply() }
     fun setRailAlpha(a: Float) { _railAlpha.value = a; sp.edit().putFloat(KEY_RAIL_ALPHA, a).apply() }
@@ -347,6 +355,8 @@ class Prefs(context: Context) {
         private const val KEY_WIDGETS = "widgets"
         private const val KEY_PAGES = "pages"
         private const val KEY_RAIL_WIDTH = "rail_width"
+        private const val KEY_DOCK_ROUND = "dock_round"
+        private const val KEY_DOCK_CORNER = "dock_corner"
         private const val KEY_ANIM_ICONS = "anim_icons"
         private const val KEY_ICON_STYLE = "icon_style"
         private const val KEY_CARD_STYLE = "card_style"

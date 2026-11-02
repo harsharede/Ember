@@ -9,6 +9,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,6 +38,8 @@ fun LookSheet(onClose: () -> Unit) {
     val railAlpha by prefs.railAlpha.collectAsStateWithLifecycle()
     val cardAlpha by prefs.cardAlpha.collectAsStateWithLifecycle()
     val wallpaperPage by prefs.wallpaperPage.collectAsStateWithLifecycle()
+    val dockRound by prefs.dockRound.collectAsStateWithLifecycle()
+    val dockCorner by prefs.dockCorner.collectAsStateWithLifecycle()
     val animIcons by prefs.animIcons.collectAsStateWithLifecycle()
     val animCards by prefs.animCards.collectAsStateWithLifecycle()
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -44,7 +49,16 @@ fun LookSheet(onClose: () -> Unit) {
                 Text("Customize look", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 TextButton({
                     prefs.setRailWidth(92); prefs.setDockHeight(1f); prefs.setRailAlpha(.8f); prefs.setCardAlpha(.8f)
+                    prefs.setDockRound(true); prefs.setDockCorner(18)
                 }) { Text("Reset") }
+            }
+            Text("Dock shape", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(dockRound, { prefs.setDockRound(true) }, SegmentedButtonDefaults.itemShape(0, 2)) { Text("Round") }
+                SegmentedButton(!dockRound, { prefs.setDockRound(false) }, SegmentedButtonDefaults.itemShape(1, 2)) { Text("Rounded rectangle") }
+            }
+            if (!dockRound) Setting("Corner size", "${dockCorner} dp") {
+                Slider(dockCorner.toFloat(), { prefs.setDockCorner(it.roundToInt()) }, valueRange = 4f..36f)
             }
             Setting("Rail width", "${railWidth} dp") {
                 Slider(railWidth.toFloat(), { prefs.setRailWidth(it.roundToInt()) }, valueRange = 64f..128f, steps = 15)

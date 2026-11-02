@@ -117,6 +117,10 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val dockHeight by app.prefs.dockHeight.collectAsStateWithLifecycle()
     val railAlpha by app.prefs.railAlpha.collectAsStateWithLifecycle()
     val cardAlpha by app.prefs.cardAlpha.collectAsStateWithLifecycle()
+    val dockRound by app.prefs.dockRound.collectAsStateWithLifecycle()
+    val dockCorner by app.prefs.dockCorner.collectAsStateWithLifecycle()
+    // Round: pill-shaped ends. Otherwise a rectangle with the chosen corners.
+    val railShape = remember(dockRound, dockCorner) { if (dockRound) RoundedCornerShape(50) else RoundedCornerShape(dockCorner.dp) }
     val wallpaperPage by app.prefs.wallpaperPage.collectAsStateWithLifecycle()
     val animIcons by app.prefs.animIcons.collectAsStateWithLifecycle()
     val animCards by app.prefs.animCards.collectAsStateWithLifecycle()
@@ -281,9 +285,9 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                     .graphicsLayer { alpha = 1f - clean() }.then(if (cleanNow) Modifier.blockTouches() else Modifier)) {
                     val railHeight = maxHeight
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha) { pkg -> notificationFilter = pkg; notes.show() }
+                        StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha, shape = railShape) { pkg -> notificationFilter = pkg; notes.show() }
                         DockColumn(dock, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = railHeight * dockHeight),
-                            iconSize = (railWidth * .57f).dp, alpha = railAlpha, entrance = entrance, animate = iconsFall,
+                            iconSize = (railWidth * .57f).dp, alpha = railAlpha, entrance = entrance, animate = iconsFall, shape = railShape,
                             onLaunch = launch, onChoose = { pickDockSlot = it })
                     }
                 }
