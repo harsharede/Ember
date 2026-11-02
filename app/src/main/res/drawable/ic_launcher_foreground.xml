@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A glowing ember pill, top left, on a dark screen: the app's idea in one shape. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#33FF7A3D"
+        android:pathData="M30,40 L78,40 A14,14 0 0 1 78,68 L30,68 A14,14 0 0 1 30,40 Z" />
+    <path android:fillColor="#FFFF7A3D"
+        android:pathData="M36,46 L72,46 A8,8 0 0 1 72,62 L36,62 A8,8 0 0 1 36,46 Z" />
+    <path android:fillColor="#FFFFD2B8"
+        android:pathData="M40,50 L56,50 A3,3 0 0 1 56,56 L40,56 A3,3 0 0 1 40,50 Z" />
+</vector>
