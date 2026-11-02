@@ -69,4 +69,13 @@ class LogicTest {
         assertEquals(listOf(3, 5, 15, 30, 60), SNOOZE_MINUTES)
         assertEquals("1 hour", snoozeLabel(60)); assertEquals("15 minutes", snoozeLabel(15))
     }
+
+    @Test fun `apps fall into sensible groups`() {
+        val user = android.os.UserHandle(null as android.os.Parcel?)
+        fun app(pkg: String, category: Int = -1) = AppEntry(pkg, pkg, ComponentName(pkg, "A"), user, work = false, category = category)
+        assertEquals(AppGroup.MESSAGING, groupOf(app("com.whatsapp", android.content.pm.ApplicationInfo.CATEGORY_SOCIAL)))
+        assertEquals(AppGroup.GAMES, groupOf(app("com.example.puzzle", android.content.pm.ApplicationInfo.CATEGORY_GAME)))
+        assertEquals(AppGroup.PRODUCTIVITY, groupOf(app("com.microsoft.teams")))
+        assertEquals(AppGroup.OTHER, groupOf(app("com.example.unknown")))
+    }
 }

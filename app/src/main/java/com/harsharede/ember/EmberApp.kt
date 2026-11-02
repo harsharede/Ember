@@ -13,6 +13,7 @@ class EmberApp : Application() {
         instance = this
         prefs = Prefs(this)
         apps = AppsRepository(this)
+        Widgets.init(this)
     }
 
     companion object {

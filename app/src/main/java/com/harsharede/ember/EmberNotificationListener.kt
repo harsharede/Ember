@@ -18,8 +18,9 @@ class EmberNotificationListener : NotificationListenerService() {
         NotificationStore.setConnected(true)
         pill = PillOverlay(this).also { it.start() }
         val apps = EmberApp.instance.apps
+        val map = runCatching { currentRanking }.getOrNull()
         val list = runCatching { activeNotifications }.getOrNull().orEmpty()
-            .mapNotNull { it.toItem(packageName, apps::labelForPackage) }
+            .mapNotNull { it.toItem(packageName, apps::labelForPackage, rankingFor(it.key, map)) }
         NotificationStore.replaceAll(list)
     }
 
@@ -30,9 +31,10 @@ class EmberNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
-        val item = sbn.toItem(packageName, EmberApp.instance.apps::labelForPackage) ?: return
+        val item = sbn.toItem(packageName, EmberApp.instance.apps::labelForPackage, rankingFor(sbn.key, rankingMap))
+        if (item == null) { NotificationStore.remove(sbn.key); return }
         val existing = NotificationStore.items.value.firstOrNull { it.key == item.key }
-        NotificationStore.upsert(item, alerts = alerts(sbn, existing, rankingMap))
+        NotificationStore.upsert(item, alerts = !item.silent && !item.persistent && alerts(sbn, existing, rankingMap))
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap?) {
@@ -48,6 +50,13 @@ class EmberNotificationListener : NotificationListenerService() {
             if (ranking.isSuspended) return false
         }
         return true
+    }
+
+    /** A fresh Ranking per notification: the item keeps reading its channel after the map moves on. */
+    private fun rankingFor(key: String, map: RankingMap?): Ranking? {
+        if (map == null) return null
+        val r = Ranking()
+        return if (map.getRanking(key, r)) r else null
     }
 
     fun dismiss(key: String) { runCatching { cancelNotification(key) } }

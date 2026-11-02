@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -28,34 +31,63 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-object EmberColors {
+/** Colours that don't come from the wallpaper. */
+object Fixed {
     val Ember = Color(0xFFFF7A3D)
-    val EmberSoft = Color(0xFFFFB38F)
-    val Glass = Color(0xFF2A2A2E)
-    val GlassStrong = Color(0xFF1C1C1F)
-    val Secondary = Color(0xFFB4B4BA)
+    val Green = Color(0xFF34C759)
+    val Yellow = Color(0xFFFFD60A)
     val Red = Color(0xFFFF453A)
 }
 
-@Composable
-fun EmberTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = darkColorScheme(
-        primary = EmberColors.Ember, onPrimary = Color.Black,
-        secondary = EmberColors.EmberSoft, surface = EmberColors.GlassStrong, onSurface = Color.White,
-        surfaceVariant = EmberColors.Glass, onSurfaceVariant = EmberColors.Secondary,
-        background = Color.Black, onBackground = Color.White,
-    ), content = content)
+/**
+ * Ember's palette, read from the Material colour scheme so it follows the wallpaper (Material You) or Ember's own
+ * orange, whichever is chosen in Settings.
+ */
+object EmberColors {
+    val Ember: Color @Composable get() = MaterialTheme.colorScheme.primary
+    val EmberSoft: Color @Composable get() = MaterialTheme.colorScheme.primary.copy(alpha = .9f)
+    val Glass: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainerHigh
+    val GlassStrong: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainer
+    val Secondary: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+    val Red: Color get() = Fixed.Red
 }
 
-/** Ember's glass: a dark translucent fill, a soft top sheen and a lit hairline edge. */
-fun Modifier.glass(shape: Shape = RoundedCornerShape(28.dp), alpha: Float = .78f): Modifier = this
-    .clip(shape)
-    .background(EmberColors.Glass.copy(alpha = alpha))
-    .drawBehind {
-        drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = .10f), .35f to Color.Transparent, 1f to Color.Transparent))
-    }
-    .border(1.dp, Brush.linearGradient(0f to Color.White.copy(alpha = .30f), .5f to Color.White.copy(alpha = .06f),
-        1f to Color.White.copy(alpha = .14f)), shape)
+private val EmberScheme = darkColorScheme(
+    primary = Fixed.Ember, onPrimary = Color.Black,
+    primaryContainer = Color(0xFF5A2410), onPrimaryContainer = Color(0xFFFFDBCC),
+    secondary = Color(0xFFFFB38F), onSecondary = Color.Black,
+    secondaryContainer = Color(0xFF4A2A1C), onSecondaryContainer = Color(0xFFFFDBCC),
+    surface = Color(0xFF121212), onSurface = Color.White, onSurfaceVariant = Color(0xFFB4B4BA),
+    surfaceContainerLowest = Color(0xFF0B0B0C), surfaceContainerLow = Color(0xFF161618), surfaceContainer = Color(0xFF1C1C1F),
+    surfaceContainerHigh = Color(0xFF2A2A2E), surfaceContainerHighest = Color(0xFF34343A),
+    background = Color.Black, onBackground = Color.White, outlineVariant = Color(0xFF3A3A40),
+)
+
+/**
+ * Dark Material 3. With "Wallpaper colours" on (the default), Android 12+ builds the scheme from the wallpaper, so the
+ * accent, cards and highlights all change with it.
+ */
+@Composable
+fun EmberTheme(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val fromWallpaper by EmberApp.instance.prefs.wallpaperColors.collectAsState()
+    val scheme = if (fromWallpaper) dynamicDarkColorScheme(context) else EmberScheme
+    MaterialTheme(colorScheme = scheme, content = content)
+}
+
+/** Ember's glass: the scheme's raised surface, a soft top sheen and a lit hairline edge. */
+@Composable
+fun Modifier.glass(shape: Shape = RoundedCornerShape(28.dp), alpha: Float = .80f): Modifier {
+    val fill = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = alpha)
+    return this
+        .clip(shape)
+        .background(fill)
+        .drawBehind {
+            drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = .08f), .35f to Color.Transparent, 1f to Color.Transparent))
+        }
+        .border(1.dp, Brush.linearGradient(0f to Color.White.copy(alpha = .24f), .5f to Color.White.copy(alpha = .05f),
+            1f to Color.White.copy(alpha = .12f)), shape)
+}
 
 @Composable
 fun AppIcon(app: AppEntry, size: Dp, modifier: Modifier = Modifier) {

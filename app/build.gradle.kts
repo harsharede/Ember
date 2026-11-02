@@ -12,8 +12,8 @@ android {
         applicationId = "com.harsharede.ember"
         minSdk = 31
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     signingConfigs {
@@ -60,6 +60,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.savedstate)
+    // Installs the Compose libraries' own startup profiles on sideloaded installs, so scrolling and animations are
+    // compiled ahead of time instead of running interpreted for the first days.
+    implementation(libs.androidx.profileinstaller)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

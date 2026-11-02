@@ -31,6 +31,54 @@ class Prefs(context: Context) {
 
     data class Launch(val count: Int, val last: Long)
 
+    private val _wallpaperColors = MutableStateFlow(sp.getBoolean(KEY_WALLPAPER_COLORS, true))
+    /** Material You: take the theme colours from the wallpaper. Off uses Ember's own orange. */
+    val wallpaperColors: StateFlow<Boolean> = _wallpaperColors.asStateFlow()
+
+    private val _drawerKeyboard = MutableStateFlow(sp.getBoolean(KEY_DRAWER_KEYBOARD, true))
+    /** Open the keyboard in the search field as soon as the app drawer opens. */
+    val drawerKeyboard: StateFlow<Boolean> = _drawerKeyboard.asStateFlow()
+
+    private val _drawerTab = MutableStateFlow(sp.getInt(KEY_DRAWER_TAB, 0))
+    /** The drawer page last used: 0 for A to Z, 1 for groups. */
+    val drawerTab: StateFlow<Int> = _drawerTab.asStateFlow()
+
+    private val _showPersistent = MutableStateFlow(sp.getBoolean(KEY_PERSISTENT, false))
+    /** List notifications that can't be dismissed (system and "always on" ones) in their own section. */
+    val showPersistent: StateFlow<Boolean> = _showPersistent.asStateFlow()
+
+    private val _widgets = MutableStateFlow(readWidgets())
+    /** Widgets on Home, top to bottom. */
+    val widgets: StateFlow<List<HomeWidget>> = _widgets.asStateFlow()
+
+    data class HomeWidget(val id: Int, val heightDp: Int)
+
+    fun setWallpaperColors(on: Boolean) { _wallpaperColors.value = on; sp.edit().putBoolean(KEY_WALLPAPER_COLORS, on).apply() }
+    fun setDrawerKeyboard(on: Boolean) { _drawerKeyboard.value = on; sp.edit().putBoolean(KEY_DRAWER_KEYBOARD, on).apply() }
+    fun setDrawerTab(tab: Int) { if (_drawerTab.value != tab) { _drawerTab.value = tab; sp.edit().putInt(KEY_DRAWER_TAB, tab).apply() } }
+    fun setShowPersistent(on: Boolean) { _showPersistent.value = on; sp.edit().putBoolean(KEY_PERSISTENT, on).apply() }
+
+    fun addWidget(widget: HomeWidget) = saveWidgets(_widgets.value.filter { it.id != widget.id } + widget)
+    fun removeWidget(id: Int) = saveWidgets(_widgets.value.filter { it.id != id })
+    fun resizeWidget(id: Int, heightDp: Int) = saveWidgets(_widgets.value.map { if (it.id == id) it.copy(heightDp = heightDp) else it })
+    fun moveWidget(id: Int, by: Int) {
+        val list = _widgets.value.toMutableList()
+        val i = list.indexOfFirst { it.id == id }
+        val j = i + by
+        if (i < 0 || j !in list.indices) return
+        list.add(j, list.removeAt(i))
+        saveWidgets(list)
+    }
+    private fun saveWidgets(list: List<HomeWidget>) {
+        _widgets.value = list
+        sp.edit().putString(KEY_WIDGETS, list.joinToString(SEP) { "${it.id}$FIELD${it.heightDp}" }).apply()
+    }
+    private fun readWidgets(): List<HomeWidget> = sp.getString(KEY_WIDGETS, null).orEmpty().split(SEP).mapNotNull { line ->
+        val parts = line.split(FIELD)
+        val id = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+        HomeWidget(id, parts.getOrNull(1)?.toIntOrNull() ?: 160)
+    }
+
     fun hideStatus(id: String) = setHidden(_hiddenStatus.value + id)
     fun showStatus(id: String) = setHidden(_hiddenStatus.value - id)
     private fun setHidden(set: Set<String>) {
@@ -78,6 +126,11 @@ class Prefs(context: Context) {
         private const val KEY_PILL = "pill"
         private const val KEY_HIDE_BAR = "hide_status_bar"
         private const val KEY_LAUNCHES = "launches"
+        private const val KEY_WALLPAPER_COLORS = "wallpaper_colors"
+        private const val KEY_DRAWER_KEYBOARD = "drawer_keyboard"
+        private const val KEY_DRAWER_TAB = "drawer_tab"
+        private const val KEY_PERSISTENT = "show_persistent"
+        private const val KEY_WIDGETS = "widgets"
         private const val SEP = "\n"
         private const val FIELD = "\t"
     }

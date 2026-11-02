@@ -1,37 +1,61 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.harsharede.ember
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,13 +64,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import java.text.Normalizer
 
@@ -65,10 +97,63 @@ fun drawerMatches(label: String, query: String): Boolean {
     return name.startsWith(q) || name.split(' ', '-', '.', '_').any { it.startsWith(q) } || (q.length >= 3 && q in name)
 }
 
-/** The app drawer: every app A to Z, with a search field and a letter strip to jump through the list. */
+/**
+ * The app drawer, two pages side by side: every app A to Z, and the same apps in groups. Typing in the search field
+ * always shows the A to Z results. [open] is true once the drawer has finished opening (that's when the keyboard comes up).
+ */
 @Composable
-fun AppDrawer(apps: List<AppEntry>, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit, onClose: () -> Unit) {
+fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit,
+              title: String? = null, onClose: () -> Unit) {
+    val prefs = EmberApp.instance.prefs
+    val autoKeyboard by prefs.drawerKeyboard.collectAsStateWithLifecycle()
+    val savedTab by prefs.drawerTab.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
+    val pager = rememberPagerState(initialPage = if (title != null) 0 else savedTab) { if (title != null) 1 else 2 }
+    LaunchedEffect(pager.settledPage) { if (title == null) prefs.setDrawerTab(pager.settledPage) }
+    LaunchedEffect(open) {
+        if (open && autoKeyboard && pager.currentPage == 0) { runCatching { focus.requestFocus() }; keyboard?.show() }
+        if (!open) { query = ""; focusManager.clearFocus(); keyboard?.hide() }
+    }
+    LaunchedEffect(query) { if (query.isNotEmpty() && pager.currentPage != 0) pager.scrollToPage(0) }
+
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = .96f))
+        .windowInsetsPadding(WindowInsets.safeDrawing).imePadding()
+        // The search field and tabs aren't a list, so a drag there moves the drawer directly.
+        .then(if (layer != null) Modifier.dragToMove(layer) else Modifier)) {
+        // A grabber says the drawer pulls down to close.
+        Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(36.dp).padding(vertical = 2.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .4f))
+                .then(Modifier.padding(vertical = 2.dp)))
+        }
+        if (title != null) Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 20.dp, top = 8.dp))
+        TextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clip(RoundedCornerShape(28.dp)).focusRequester(focus),
+            placeholder = { Text("Search apps") }, singleLine = true,
+            leadingIcon = { Icon(Icons.Rounded.Search, null) },
+            trailingIcon = { if (query.isNotEmpty()) IconButton({ query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+            keyboardActions = KeyboardActions(onGo = { apps.firstOrNull { drawerMatches(it.label, query) }?.let(onLaunch) }),
+            colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent))
+        if (title == null) SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            listOf("A to Z", "Groups").forEachIndexed { i, label ->
+                SegmentedButton(pager.currentPage == i, { scope.launch { pager.animateScrollToPage(i) } },
+                    SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
+            }
+        }
+        HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+            if (page == 0) AlphabeticalApps(apps, query, layer, onLaunch, onAddToDock)
+            else GroupedApps(apps, layer, onLaunch, onAddToDock)
+        }
+    }
+}
+
+@Composable
+private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
     val visible = remember(apps, query) { apps.filter { drawerMatches(it.label, query) } }
     val grouped = remember(visible) { visible.groupBy { drawerLetter(it.label) }.toSortedMap(compareBy<String> { it == "#" }.thenBy { it }) }
     val listState = rememberLazyListState()
@@ -78,28 +163,20 @@ fun AppDrawer(apps: List<AppEntry>, onLaunch: (AppEntry) -> Unit, onAddToDock: (
         var i = 0
         grouped.mapValues { (_, list) -> i.also { i += list.size + 1 } }
     }
-    Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .86f)).windowInsetsPadding(WindowInsets.safeDrawing)) {
-        TextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clip(RoundedCornerShape(18.dp)),
-            placeholder = { Text("Search apps") }, singleLine = true,
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { visible.firstOrNull()?.let(onLaunch) }),
-            colors = TextFieldDefaults.colors(focusedContainerColor = EmberColors.Glass, unfocusedContainerColor = EmberColors.Glass,
-                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent))
-        Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime)) {
-            LazyColumn(Modifier.weight(1f).fillMaxHeight(), state = listState) {
-                grouped.forEach { (letter, list) ->
-                    stickyHeader(key = "h-$letter") {
-                        Text(letter, color = EmberColors.Ember, fontWeight = FontWeight.Bold, fontSize = 15.sp,
-                            modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = .7f)).padding(start = 22.dp, top = 10.dp, bottom = 4.dp))
-                    }
-                    items(list, key = { it.key }) { app -> DrawerRow(app, onLaunch, onAddToDock) }
+    LaunchedEffect(query) { listState.scrollToItem(0) }
+    Row(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.weight(1f).fillMaxHeight().then(if (layer != null) Modifier.nestedScroll(layer.closeConnection) else Modifier), state = listState) {
+            grouped.forEach { (letter, list) ->
+                stickyHeader(key = "h-$letter") {
+                    Text(letter, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLowest).padding(start = 22.dp, top = 10.dp, bottom = 4.dp))
                 }
-                if (visible.isEmpty()) item { Text("No apps match \"$query\"", color = EmberColors.Secondary, modifier = Modifier.padding(24.dp)) }
+                items(list, key = { it.key }) { app -> DrawerRow(app, onLaunch, onAddToDock) }
             }
-            LetterStrip(headingIndex.keys.toList()) { letter ->
-                headingIndex[letter]?.let { scope.launch { listState.scrollToItem(it) } }
-            }
+            if (visible.isEmpty()) item { Text("No apps match \"$query\"", color = EmberColors.Secondary, modifier = Modifier.padding(24.dp)) }
+        }
+        if (query.isEmpty()) LetterStrip(headingIndex.keys.toList()) { letter ->
+            headingIndex[letter]?.let { scope.launch { listState.scrollToItem(it) } }
         }
     }
 }
@@ -107,20 +184,85 @@ fun AppDrawer(apps: List<AppEntry>, onLaunch: (AppEntry) -> Unit, onAddToDock: (
 @Composable
 private fun DrawerRow(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    val repo = EmberApp.instance.apps
     Box {
-        Row(Modifier.fillMaxWidth().combinedClickable(onLongClick = { menu = true }) { onLaunch(app) }
-            .padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            AppIcon(app, 44.dp)
-            Spacer(Modifier.width(14.dp))
-            Text(app.label, color = Color.White, fontSize = 17.sp, modifier = Modifier.weight(1f))
-            if (app.work) Text("Work", color = EmberColors.Secondary, fontSize = 12.sp)
+        ListItem(
+            headlineContent = { Text(app.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            leadingContent = { AppIcon(app, 44.dp) },
+            trailingContent = if (app.work) ({ Text("Work", color = EmberColors.Secondary, fontSize = 12.sp) }) else null,
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            modifier = Modifier.combinedClickable(onLongClick = { menu = true }) { onLaunch(app) },
+        )
+        AppMenu(app, menu, { menu = false }, onAddToDock)
+    }
+}
+
+@Composable
+private fun AppMenu(app: AppEntry, open: Boolean, onDismiss: () -> Unit, onAddToDock: (AppEntry) -> Unit) {
+    val repo = EmberApp.instance.apps
+    DropdownMenu(open, onDismiss) {
+        DropdownMenuItem({ Text("Add to dock") }, { onDismiss(); onAddToDock(app) })
+        DropdownMenuItem({ Text("App info") }, { onDismiss(); repo.openAppInfo(app) })
+        DropdownMenuItem({ Text("Uninstall") }, { onDismiss(); repo.uninstall(app) })
+    }
+}
+
+/** Apps in groups, as cards; tap a card to open the whole group. */
+@Composable
+private fun GroupedApps(apps: List<AppEntry>, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
+    val groups = remember(apps) { apps.groupBy(::groupOf).toSortedMap(compareBy<AppGroup> { it == AppGroup.OTHER }.thenBy { it.ordinal }) }
+    var openGroup by remember { mutableStateOf<AppGroup?>(null) }
+    Box(Modifier.fillMaxSize()) {
+        LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize().then(if (layer != null) Modifier.nestedScroll(layer.closeConnection) else Modifier),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            items(groups.entries.toList(), key = { it.key.name }) { (group, list) ->
+                Column(Modifier.clip(RoundedCornerShape(28.dp)).clickable { openGroup = group }) {
+                    Column(Modifier.fillMaxWidth().aspectRatio(1f).glass().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        list.take(4).chunked(2).forEach { pair ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                pair.forEach { app ->
+                                    Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(50)).clickable { onLaunch(app) }, contentAlignment = Alignment.Center) {
+                                        AppIcon(app, 56.dp)
+                                    }
+                                }
+                                if (pair.size == 1) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                    Text("${group.title}  ·  ${list.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                }
+            }
         }
-        DropdownMenu(menu, { menu = false }) {
-            DropdownMenuItem({ Text("Add to dock") }, { menu = false; onAddToDock(app) })
-            DropdownMenuItem({ Text("App info") }, { menu = false; repo.openAppInfo(app) })
-            DropdownMenuItem({ Text("Uninstall") }, { menu = false; repo.uninstall(app) })
+        val shown = openGroup
+        BackHandler(shown != null) { openGroup = null }
+        AnimatedVisibility(shown != null, enter = fadeIn() + scaleIn(initialScale = .92f), exit = fadeOut() + scaleOut(targetScale = .92f)) {
+            val group = shown ?: return@AnimatedVisibility
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .55f))
+                .clickable(remember { MutableInteractionSource() }, null) { openGroup = null }, contentAlignment = Alignment.Center) {
+                Column(Modifier.padding(20.dp).glass(RoundedCornerShape(32.dp), alpha = .97f).clickable(remember { MutableInteractionSource() }, null) {}
+                    .padding(18.dp)) {
+                    Text(group.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 12.dp))
+                    LazyVerticalGrid(GridCells.Fixed(4), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        items(groups[group].orEmpty(), key = { it.key }) { app -> GridApp(app, onLaunch, onAddToDock) }
+                    }
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun GridApp(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        Column(Modifier.clip(RoundedCornerShape(16.dp)).combinedClickable(onLongClick = { menu = true }) { onLaunch(app) }.padding(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            AppIcon(app, 52.dp)
+            Text(app.label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 4.dp))
+        }
+        AppMenu(app, menu, { menu = false }, onAddToDock)
     }
 }
 
@@ -142,8 +284,7 @@ private fun LetterStrip(letters: List<String>, onLetter: (String) -> Unit) {
                     event.changes.firstOrNull()?.let { if (it.pressed) { pick(it.position.y); it.consume() } else last = "" }
                 }
             }
-        }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly) {
-        letters.forEach { Text(it, color = EmberColors.EmberSoft, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+        }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
+        letters.forEach { Text(it, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
     }
 }
-

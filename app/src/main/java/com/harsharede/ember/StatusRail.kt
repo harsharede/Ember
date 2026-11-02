@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.SignalCellularAlt
 import androidx.compose.material.icons.rounded.SignalCellularAlt1Bar
 import androidx.compose.material.icons.rounded.SignalCellularAlt2Bar
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -121,8 +122,8 @@ fun StatusCapsule(
         if (shown(StatusIcon.NOTIFICATIONS) && notifications.isNotEmpty()) SwipeAway(onGone = { hide(StatusIcon.NOTIFICATIONS) }) {
             Row(Modifier.clip(RoundedCornerShape(50)).background(EmberColors.Ember.copy(alpha = .9f))
                 .clickable { expanded = !expanded }.padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Notifications, "Notifications", tint = Color.Black, modifier = Modifier.size(14.dp))
-                Text("${notifications.size}", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                Icon(Icons.Rounded.Notifications, "Notifications", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(14.dp))
+                Text("${notifications.size}", color = MaterialTheme.colorScheme.onPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 3.dp))
             }
         }

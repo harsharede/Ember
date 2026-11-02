@@ -8,10 +8,14 @@ banners.
   Bluetooth, airplane mode, Do Not Disturb, silent/vibrate, location, power saving and battery. Swipe any icon sideways
   to hide it; Settings brings it back. The orange notification count opens to show which apps have notifications.
   Below it, a four-app dock (hold a place to change its app).
-- **Swipe up** for every app, A to Z, with search and a letter strip down the edge.
+- **Swipe up** for the app drawer: every app A to Z (the keyboard opens so you can type straight away) or, one swipe
+  across, the same apps in groups. Pull it down to close.
+- **Widgets**: hold Home › Add widget. Edit Home to move, resize or remove them.
+- **Material You**: colours come from your wallpaper (or Ember's orange, in Settings).
 - **Swipe down** (or tap the count) for the notification page: a timeline under Now, Earlier today, Yesterday and
   Older. Reply right there when the app allows it, or tap **Remind me** for 3, 5, 15 or 30 minutes or an hour. Swipe a
-  card away to dismiss it.
+  card away to dismiss it. Push up past the end to close. Silent notifications and ones that can't be dismissed
+  are folded into their own sections, and the latter have a Turn off button that opens that channel's settings.
 - **The pill.** When a notification arrives while you're using the phone, a small pill glows at the top left, like an
   old phone's notification light, instead of a banner over what you're doing. Tap it or pull it down to read, reply or
   snooze in a pop-up; flick it sideways to put it out.
@@ -22,7 +26,9 @@ Made for the Galaxy S23 Ultra, works on any phone with Android 12 or later.
 
 1. Install the APK and open **Ember settings**.
 2. Turn on, in order: **Use Ember as your Home app**, **Notification access**, **Display over other apps**.
-3. So Android's own banners don't cover the screen as well as the pill: Samsung Settings › Notifications ›
+3. If Notification access is greyed out (Android 13+ does this for apps installed from a file): App info › ⋮ ›
+   Allow restricted settings, then try again.
+4. So Android's own banners don't cover the screen as well as the pill: Samsung Settings › Notifications ›
    Notification pop-up style, and turn pop-ups off (or per app).
 
 ## Privacy

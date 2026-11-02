@@ -32,6 +32,8 @@ data class AppEntry(
     val component: ComponentName,
     val user: UserHandle,
     val work: Boolean,
+    /** Android's ApplicationInfo.category, or -1 when the app doesn't say. */
+    val category: Int = -1,
 ) {
     val packageName: String get() = component.packageName
 }
@@ -74,7 +76,8 @@ class AppsRepository(private val context: Context) {
             launcherApps.getActivityList(null, user).filter { it.componentName.packageName != context.packageName }.map { info ->
                 val key = keyFor(info.componentName, user)
                 found[key] = info
-                AppEntry(key, info.label.toString().trim(), info.componentName, user, work = user != me)
+                AppEntry(key, info.label.toString().trim(), info.componentName, user, work = user != me,
+                    category = info.applicationInfo.category)
             }
         }
         synchronized(infos) { infos.clear(); infos.putAll(found) }
@@ -140,4 +143,56 @@ fun suggest(apps: List<AppEntry>, launches: Map<String, Prefs.Launch>, exclude: 
         .mapNotNull { app -> launches[app.key]?.let { l -> app to l.count * Math.pow(0.5, (now - l.last).coerceAtLeast(0) / halfLife) } }
         .sortedByDescending { it.second }
         .take(limit).map { it.first }.toList()
+}
+
+/** The drawer's groups. Apps say their own category; for the many that don't, well-known package names fill in. */
+enum class AppGroup(val title: String) {
+    SOCIAL("Social"), MESSAGING("Messaging"), PRODUCTIVITY("Productivity"), FINANCE("Finance & Shopping"),
+    ENTERTAINMENT("Entertainment"), MUSIC("Music & Audio"), PHOTOS("Photo & Video"), GAMES("Games"),
+    TRAVEL("Travel & Maps"), NEWS("News & Reading"), UTILITIES("Utilities"), OTHER("Other");
+}
+
+private val PACKAGE_HINTS: List<Pair<String, AppGroup>> = listOf(
+    "whatsapp" to AppGroup.MESSAGING, "telegram" to AppGroup.MESSAGING, "messag" to AppGroup.MESSAGING, "signal" to AppGroup.MESSAGING,
+    "android.mms" to AppGroup.MESSAGING, "skype" to AppGroup.MESSAGING, "discord" to AppGroup.MESSAGING, "slack" to AppGroup.PRODUCTIVITY,
+    "facebook" to AppGroup.SOCIAL, "instagram" to AppGroup.SOCIAL, "twitter" to AppGroup.SOCIAL, "snapchat" to AppGroup.SOCIAL,
+    "linkedin" to AppGroup.SOCIAL, "reddit" to AppGroup.SOCIAL, "threads" to AppGroup.SOCIAL,
+    "teams" to AppGroup.PRODUCTIVITY, "outlook" to AppGroup.PRODUCTIVITY, "office" to AppGroup.PRODUCTIVITY, "gmail" to AppGroup.PRODUCTIVITY,
+    "android.gm" to AppGroup.PRODUCTIVITY, "docs" to AppGroup.PRODUCTIVITY, "calendar" to AppGroup.PRODUCTIVITY, "notes" to AppGroup.PRODUCTIVITY,
+    "drive" to AppGroup.PRODUCTIVITY, "zoom" to AppGroup.PRODUCTIVITY, "keep" to AppGroup.PRODUCTIVITY,
+    "bank" to AppGroup.FINANCE, "pay" to AppGroup.FINANCE, "amex" to AppGroup.FINANCE, "wallet" to AppGroup.FINANCE, "upi" to AppGroup.FINANCE,
+    "amazon" to AppGroup.FINANCE, "flipkart" to AppGroup.FINANCE, "shop" to AppGroup.FINANCE,
+    "youtube" to AppGroup.ENTERTAINMENT, "netflix" to AppGroup.ENTERTAINMENT, "prime" to AppGroup.ENTERTAINMENT, "hotstar" to AppGroup.ENTERTAINMENT,
+    "xstream" to AppGroup.ENTERTAINMENT, "jiocinema" to AppGroup.ENTERTAINMENT,
+    "spotify" to AppGroup.MUSIC, "music" to AppGroup.MUSIC, "podcast" to AppGroup.MUSIC, "jbl" to AppGroup.MUSIC, "audio" to AppGroup.MUSIC,
+    "camera" to AppGroup.PHOTOS, "gallery" to AppGroup.PHOTOS, "photos" to AppGroup.PHOTOS, "video" to AppGroup.PHOTOS,
+    "maps" to AppGroup.TRAVEL, "uber" to AppGroup.TRAVEL, "olacabs" to AppGroup.TRAVEL, "travel" to AppGroup.TRAVEL,
+    "news" to AppGroup.NEWS, "kindle" to AppGroup.NEWS, "reader" to AppGroup.NEWS,
+    "settings" to AppGroup.UTILITIES, "clock" to AppGroup.UTILITIES, "calculator" to AppGroup.UTILITIES, "files" to AppGroup.UTILITIES,
+    "myfiles" to AppGroup.UTILITIES, "dialer" to AppGroup.UTILITIES, "contacts" to AppGroup.UTILITIES, "chrome" to AppGroup.UTILITIES,
+    "browser" to AppGroup.UTILITIES, "vpn" to AppGroup.UTILITIES, "authenticator" to AppGroup.UTILITIES, "phone" to AppGroup.UTILITIES,
+)
+
+fun groupOf(app: AppEntry): AppGroup {
+    val byCategory = when (app.category) {
+        android.content.pm.ApplicationInfo.CATEGORY_GAME -> AppGroup.GAMES
+        android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> AppGroup.MUSIC
+        android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> AppGroup.ENTERTAINMENT
+        android.content.pm.ApplicationInfo.CATEGORY_IMAGE -> AppGroup.PHOTOS
+        android.content.pm.ApplicationInfo.CATEGORY_SOCIAL -> AppGroup.SOCIAL
+        android.content.pm.ApplicationInfo.CATEGORY_NEWS -> AppGroup.NEWS
+        android.content.pm.ApplicationInfo.CATEGORY_MAPS -> AppGroup.TRAVEL
+        android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY -> AppGroup.PRODUCTIVITY
+        android.content.pm.ApplicationInfo.CATEGORY_ACCESSIBILITY -> AppGroup.UTILITIES
+        else -> null
+    }
+    // A name hint wins over a vague category: chat apps often call themselves "social".
+    val pkg = app.packageName.lowercase()
+    val hint = PACKAGE_HINTS.firstOrNull { pkg.contains(it.first) }?.second
+    return when {
+        hint == AppGroup.MESSAGING -> hint
+        byCategory != null -> byCategory
+        hint != null -> hint
+        else -> AppGroup.OTHER
+    }
 }

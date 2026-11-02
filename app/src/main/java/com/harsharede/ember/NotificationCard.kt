@@ -21,10 +21,12 @@ import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.NotificationsPaused
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -64,7 +66,7 @@ fun NotificationCard(item: NotifItem, now: Long, modifier: Modifier = Modifier, 
     val context = LocalContext.current
     var replying by rememberSaveable(item.key) { mutableStateOf(false) }
     var snoozeOpen by remember { mutableStateOf(false) }
-    Column(modifier.fillMaxWidth().glass(RoundedCornerShape(22.dp))
+    Column(modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp), alpha = .92f)
         .clickable { if (NotificationStore.open(context, item)) onDone() }
         .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -77,9 +79,9 @@ fun NotificationCard(item: NotifItem, now: Long, modifier: Modifier = Modifier, 
                 Icon(Icons.Rounded.Close, "Dismiss", tint = EmberColors.Secondary, modifier = Modifier.size(18.dp))
             } else Spacer(Modifier.width(10.dp))
         }
-        if (item.title.isNotBlank()) Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+        if (item.title.isNotBlank()) Text(item.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp, end = 8.dp))
-        if (item.text.isNotBlank()) Text(item.text, color = Color.White.copy(alpha = .86f), fontSize = 14.sp,
+        if (item.text.isNotBlank()) Text(item.text, color = MaterialTheme.colorScheme.onSurface.copy(alpha = .86f), fontSize = 14.sp,
             maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp, end = 8.dp))
         if (replying && item.reply != null) {
             ReplyField(item, onSent = { replying = false; onDone() })
@@ -99,6 +101,10 @@ fun NotificationCard(item: NotifItem, now: Long, modifier: Modifier = Modifier, 
                 }
             }
             if (item.contentIntent != null) ActionChip(Icons.AutoMirrored.Rounded.OpenInNew, "Open") { if (NotificationStore.open(context, item)) onDone() }
+            // Can't be swiped away: offer the one place it can be switched off.
+            if (item.persistent) ActionChip(Icons.Rounded.NotificationsOff, "Turn off") {
+                runCatching { context.startActivity(channelSettingsIntent(item)) }
+            }
         }
     }
 }
@@ -121,7 +127,7 @@ private fun ReplyField(item: NotifItem, onSent: () -> Unit) {
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { send() }),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EmberColors.Ember, unfocusedBorderColor = Color.White.copy(alpha = .2f)))
         IconButton(::send, Modifier.padding(start = 4.dp).clip(CircleShape).background(EmberColors.Ember)) {
-            Icon(Icons.AutoMirrored.Rounded.Send, "Send", tint = Color.Black)
+            Icon(Icons.AutoMirrored.Rounded.Send, "Send", tint = MaterialTheme.colorScheme.onPrimary)
         }
     }
 }

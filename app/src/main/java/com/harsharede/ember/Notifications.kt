@@ -1,6 +1,8 @@
 package com.harsharede.ember
 
 import android.app.ActivityOptions
+import android.app.NotificationManager
+import android.service.notification.NotificationListenerService
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.RemoteInput
@@ -28,7 +30,14 @@ data class NotifItem(
     val clearable: Boolean,
     val contentIntent: PendingIntent?,
     val reply: ReplyAction?,
+    /** The notification channel, so a persistent one can be switched off in Android's settings. */
+    val channelId: String? = null,
+    /** Low-importance ("silent") notifications: listed, but they don't count on the rail or light the pill. */
+    val silent: Boolean = false,
 ) {
+    /** Can't be swiped away: system notices and apps' "always on" ones. Kept in their own section. */
+    val persistent: Boolean get() = !clearable
+
     data class ReplyAction(val label: String, val intent: PendingIntent, val inputs: Array<RemoteInput>) {
         override fun equals(other: Any?) = other is ReplyAction && other.intent == intent
         override fun hashCode() = intent.hashCode()
@@ -89,17 +98,28 @@ object NotificationStore {
 }
 
 /** Turns Android's notification into Ember's, or null for ones Ember doesn't list. */
-internal fun StatusBarNotification.toItem(selfPackage: String, label: (String) -> String): NotifItem? {
+internal fun StatusBarNotification.toItem(selfPackage: String, label: (String) -> String, ranking: NotificationListenerService.Ranking? = null): NotifItem? {
     val n = notification
     if (packageName == selfPackage) return null
     if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return null
+    // Ongoing ones (music, navigation, "running in the background", downloads) belong to their apps, not a list of things to read.
+    if (n.flags and Notification.FLAG_FOREGROUND_SERVICE != 0) return null
     if (isOngoing && n.category != Notification.CATEGORY_CALL) return null
+    val importance = ranking?.importance ?: NotificationManager.IMPORTANCE_DEFAULT
+    if (importance == NotificationManager.IMPORTANCE_NONE) return null
     val extras = n.extras
+    val channelName = ranking?.channel?.name?.toString()
     val title = extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)
         ?: extras.getCharSequence(Notification.EXTRA_TITLE_BIG) ?: extras.getCharSequence(Notification.EXTRA_TITLE)
+    // Many system notifications only fill in the "small" fields or a list of lines; try them all before giving up.
     val text = lastMessage(extras) ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT)
-        ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT)
-    if (title.isNullOrBlank() && text.isNullOrBlank()) return null
+        ?: extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString("\n")
+        ?: extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT) ?: extras.getCharSequence(Notification.EXTRA_INFO_TEXT)
+        ?: extras.getCharSequence(Notification.EXTRA_SUB_TEXT) ?: n.tickerText
+    val shownTitle = title?.toString()?.takeIf { it.isNotBlank() } ?: channelName ?: ""
+    // An app that draws its own notification and fills in nothing: name the channel so it's at least clear what it is.
+    val shownText = text?.toString()?.takeIf { it.isNotBlank() }
+        ?: if (shownTitle.isBlank()) "Notification from ${label(packageName)}" else ""
     val reply = n.actions?.firstNotNullOfOrNull { action ->
         val inputs = action.remoteInputs?.filter { it.allowFreeFormInput }?.toTypedArray()
         if (inputs.isNullOrEmpty() || action.actionIntent == null) null
@@ -107,11 +127,20 @@ internal fun StatusBarNotification.toItem(selfPackage: String, label: (String) -
     }
     return NotifItem(
         key = key, packageName = packageName, appLabel = label(packageName),
-        title = title?.toString().orEmpty(), text = text?.toString().orEmpty(),
+        title = shownTitle, text = shownText,
         postTime = postTime, color = n.color, clearable = isClearable,
         contentIntent = n.contentIntent, reply = reply,
+        channelId = n.channelId, silent = importance < NotificationManager.IMPORTANCE_DEFAULT,
     )
 }
+
+/** Android's settings page for one channel of one app, where a notification that can't be dismissed can be turned off. */
+fun channelSettingsIntent(item: NotifItem): Intent =
+    (if (item.channelId != null) Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+        .putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, item.channelId)
+    else Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS))
+        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, item.packageName)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
 /** Chat apps put the conversation in EXTRA_MESSAGES; the last one, with its sender, is the useful line. */
 private fun lastMessage(extras: Bundle): CharSequence? {

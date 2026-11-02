@@ -7,8 +7,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -16,7 +14,9 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,23 +28,34 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -57,23 +68,21 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Which full-screen layer is open over Home. Home's own button closes any of them. */
-class HomeLayers {
-    var drawer by mutableStateOf(false)
-    var notifications by mutableStateOf(false)
-    var notificationFilter by mutableStateOf<String?>(null)
-    var pickDockSlot by mutableStateOf<Int?>(null)
-    fun closeAll() { drawer = false; notifications = false; pickDockSlot = null }
+/** What the Activity asks of Home: close everything (the Home button), or start adding a widget. */
+class HomeRequests {
+    var closeAll by mutableIntStateOf(0)
+    var pickWidget by mutableStateOf(false)
 }
 
 @Composable
-fun HomeScreen(layers: HomeLayers) {
+fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidgetProviderInfo) -> Unit) {
     val context = LocalContext.current
     val app = EmberApp.instance
     val apps by app.apps.apps.collectAsStateWithLifecycle()
     val dockKeys by app.prefs.dock.collectAsStateWithLifecycle()
     val launches by app.prefs.launches.collectAsStateWithLifecycle()
     val hidden by app.prefs.hiddenStatus.collectAsStateWithLifecycle()
+    val widgets by app.prefs.widgets.collectAsStateWithLifecycle()
     val notifications by NotificationStore.items.collectAsStateWithLifecycle()
     val connected by NotificationStore.connected.collectAsStateWithLifecycle()
     val status by rememberDeviceStatus()
@@ -81,74 +90,130 @@ fun HomeScreen(layers: HomeLayers) {
     LaunchedEffect(Unit) {
         while (true) { now = System.currentTimeMillis(); delay(60_000 - now % 60_000 + 50) }
     }
+    val scope = rememberCoroutineScope()
+    val drawer = remember { Layer(scope, sign = -1f) }
+    val notes = remember { Layer(scope, sign = 1f) }
+    val pull = remember { HomePull(drawer, notes) }
+    var notificationFilter by remember { mutableStateOf<String?>(null) }
+    var pickDockSlot by remember { mutableStateOf<Int?>(null) }
+    var editing by remember { mutableStateOf(false) }
+    val drawerOpen by remember { derivedStateOf { drawer.progress >= 1f } }
+    val drawerShown by remember { derivedStateOf { drawer.visible } }
+    val notesShown by remember { derivedStateOf { notes.visible } }
+
+    // Only what's worth attention counts on the rail: not silent ones, not ones that can't be dismissed.
+    val counted = remember(notifications) { notifications.filter { !it.silent && !it.persistent } }
     val dock = remember(apps, dockKeys) { dockKeys.map { key -> apps.firstOrNull { it.key == key } } }
     val suggestions = remember(apps, launches, dockKeys, now / 3_600_000) { suggest(apps, launches, dockKeys.toSet(), now) }
-    val launch: (AppEntry) -> Unit = { app.apps.launch(it); layers.closeAll() }
+    val launch: (AppEntry) -> Unit = { entry -> app.apps.launch(entry); drawer.hide(); notes.hide() }
     val addToDock: (AppEntry) -> Unit = { entry ->
         val slot = dockKeys.indexOfFirst { it.isEmpty() }.takeIf { it >= 0 } ?: (Prefs.DOCK_SLOTS - 1)
         app.prefs.setDockSlot(slot, entry.key)
     }
+    LaunchedEffect(requests.closeAll) { drawer.hide(); notes.hide(); pickDockSlot = null; editing = false; requests.pickWidget = false }
 
-    BackHandler(layers.drawer || layers.notifications || layers.pickDockSlot != null) { layers.closeAll() }
+    BackHandler(drawerShown || notesShown || pickDockSlot != null || editing || requests.pickWidget) {
+        when {
+            requests.pickWidget -> requests.pickWidget = false
+            pickDockSlot != null -> pickDockSlot = null
+            drawerShown -> drawer.hide()
+            notesShown -> notes.hide()
+            else -> editing = false
+        }
+    }
 
     val density = LocalDensity.current
     var menu by remember { mutableStateOf(false) }
-    // The layers sit beside Home's gesture area, not inside it, so scrolling a list never opens another layer.
-    Box(Modifier.fillMaxSize()) {
-    Box(Modifier.fillMaxSize()
-        // A light shade at the top and bottom keeps text readable on any wallpaper.
-        .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .45f), .5f to Color.Black.copy(alpha = .15f), 1f to Color.Black.copy(alpha = .45f)))
-        .pointerInput(Unit) {
-            val threshold = with(density) { 60.dp.toPx() }
-            var total = 0f
-            detectVerticalDragGestures(onDragStart = { total = 0f }, onDragEnd = {
-                if (total < -threshold) layers.drawer = true                                    // swipe up: apps
-                else if (total > threshold) { layers.notificationFilter = null; layers.notifications = true } // swipe down: notifications
-            }) { change, amount -> change.consume(); total += amount }
-        }
-        .combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-            onLongClick = { menu = true }, onClick = {})) {
-        Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 18.dp, end = 10.dp, top = 8.dp)) {
-            Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                DateHeader(now)
-                SuggestionsCard(suggestions, apps.isEmpty(), launch)
-                ClockCard(now)
-                if (!connected) AccessCard()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val heightPx = with(density) { maxHeight.toPx() }
+        drawer.heightPx = heightPx * .8f
+        notes.heightPx = heightPx * .8f
+        Box(Modifier.fillMaxSize()
+            .graphicsLayer {
+                // Home sinks back a little as a layer comes over it.
+                val p = maxOf(drawer.progress, notes.progress)
+                alpha = 1f - .5f * p
+                scaleX = 1f - .05f * p; scaleY = scaleX
             }
-            Column(Modifier.width(92.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatusCapsule(status, now, notifications, hidden, Modifier.fillMaxWidth()) { pkg ->
-                    layers.notificationFilter = pkg; layers.notifications = true
+            .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .40f), .5f to Color.Black.copy(alpha = .12f), 1f to Color.Black.copy(alpha = .40f)))
+            .nestedScroll(pull.connection)
+            .pointerInput(Unit) {
+                // Drags outside the scrolling column (the rail, empty space): up for apps, down for notifications.
+                val tracker = VelocityTracker()
+                var travelled = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { tracker.resetTracking(); travelled = 0f },
+                    onDragEnd = { pull.release(tracker.calculateVelocity().y) },
+                    onDragCancel = { pull.release(0f) },
+                ) { change, dy ->
+                    change.consume(); travelled += dy
+                    tracker.addPosition(change.uptimeMillis, Offset(0f, travelled))
+                    pull.drag(dy)
                 }
-                DockColumn(dock, Modifier.fillMaxWidth(), onLaunch = launch, onChoose = { layers.pickDockSlot = it })
             }
-        }
-        // A small handle says there's more below.
-        Box(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 10.dp)
-            .clip(RoundedCornerShape(50)).clickable { layers.drawer = true }.padding(horizontal = 24.dp, vertical = 10.dp)) {
-            Box(Modifier.width(44.dp).height(5.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = .45f)))
-        }
-        Box(Modifier.align(Alignment.Center)) {
-            DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem({ Text("Wallpaper") }, { menu = false
-                    runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper")) } })
-                DropdownMenuItem({ Text("Ember settings") }, { menu = false
-                    context.startActivity(Intent(context, SettingsActivity::class.java)) })
+            .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = { menu = true }, onClick = {})) {
+            Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 16.dp, end = 10.dp, top = 6.dp)) {
+                BoxWithConstraints(Modifier.weight(1f).padding(end = 12.dp)) {
+                    val columnWidth = maxWidth.value.toInt()
+                    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
+                        item("date") { DateHeader(now) }
+                        item("suggestions") { SuggestionsCard(suggestions, apps.isEmpty(), launch) }
+                        item("clock") { ClockCard(now) }
+                        if (!connected) item("access") { AccessCard() }
+                        items(widgets, key = { "w${it.id}" }) { widget -> HomeWidgetView(widget, editing, columnWidth) }
+                        if (editing) item("edit-actions") {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilledTonalButton({ requests.pickWidget = true }) { Text("Add widget") }
+                                FilledTonalButton({ editing = false }) { Text("Done") }
+                            }
+                        }
+                    }
+                }
+                Column(Modifier.width(92.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth()) { pkg -> notificationFilter = pkg; notes.show() }
+                    DockColumn(dock, Modifier.fillMaxWidth(), onLaunch = launch, onChoose = { pickDockSlot = it })
+                }
+            }
+            // A small handle says there's more below.
+            Box(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 10.dp)
+                .clip(RoundedCornerShape(50)).clickable { drawer.show() }.padding(horizontal = 24.dp, vertical = 10.dp)) {
+                Box(Modifier.width(44.dp).height(5.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = .45f)))
+            }
+            Box(Modifier.align(Alignment.Center)) {
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem({ Text("Add widget") }, { menu = false; requests.pickWidget = true })
+                    DropdownMenuItem({ Text(if (editing) "Done editing" else "Edit Home") }, { menu = false; editing = !editing })
+                    DropdownMenuItem({ Text("Wallpaper") }, { menu = false
+                        runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper")) } })
+                    DropdownMenuItem({ Text("Ember settings") }, { menu = false
+                        context.startActivity(Intent(context, SettingsActivity::class.java)) })
+                }
             }
         }
 
-    }
-        AnimatedVisibility(layers.notifications, enter = slideInVertically { -it } + fadeIn(), exit = slideOutVertically { -it } + fadeOut()) {
-            NotificationsScreen(notifications, connected, now, layers.notificationFilter, onFilter = { layers.notificationFilter = it },
-                onClose = { layers.notifications = false })
+        // The layers stay composed, parked off screen, so they open on the first frame of a swipe with nothing to build.
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            translationY = -(1f - notes.progress) * size.height
+            alpha = if (notes.progress == 0f) 0f else 1f
+        }) {
+            if (notesShown) NotificationsScreen(notifications, connected, now, notificationFilter, notes, onFilter = { notificationFilter = it })
         }
-        AnimatedVisibility(layers.drawer, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
-            AppDrawer(apps, onLaunch = launch, onAddToDock = addToDock, onClose = { layers.drawer = false })
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            translationY = (1f - drawer.progress) * size.height
+            alpha = if (drawer.progress == 0f) 0f else 1f
+        }) {
+            AppDrawer(apps, open = drawerOpen, layer = drawer, onLaunch = launch, onAddToDock = addToDock, onClose = { drawer.hide() })
         }
-        val slot = layers.pickDockSlot
+        val slot = pickDockSlot
         AnimatedVisibility(slot != null, enter = fadeIn(), exit = fadeOut()) {
-            AppDrawer(apps, onLaunch = { entry -> if (slot != null) app.prefs.setDockSlot(slot, entry.key); layers.pickDockSlot = null },
-                onAddToDock = { entry -> if (slot != null) app.prefs.setDockSlot(slot, entry.key); layers.pickDockSlot = null },
-                onClose = { layers.pickDockSlot = null })
+            AppDrawer(apps, open = slot != null, layer = null, title = "Choose an app for the dock",
+                onLaunch = { entry -> if (slot != null) app.prefs.setDockSlot(slot, entry.key); pickDockSlot = null },
+                onAddToDock = { entry -> if (slot != null) app.prefs.setDockSlot(slot, entry.key); pickDockSlot = null },
+                onClose = { pickDockSlot = null })
+        }
+        AnimatedVisibility(requests.pickWidget, enter = fadeIn(), exit = fadeOut()) {
+            WidgetPicker(onPick = { info -> requests.pickWidget = false; editing = true; onAddWidget(info) },
+                onClose = { requests.pickWidget = false })
         }
     }
 }
@@ -156,9 +221,9 @@ fun HomeScreen(layers: HomeLayers) {
 @Composable
 private fun DateHeader(now: Long) {
     val date = Date(now)
-    Column(Modifier.padding(top = 4.dp)) {
-        Text(SimpleDateFormat("EEEE", Locale.getDefault()).format(date).uppercase(), color = EmberColors.Ember,
-            fontSize = 17.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+    Column(Modifier.padding(top = 2.dp)) {
+        Text(SimpleDateFormat("EEEE", Locale.getDefault()).format(date).uppercase(), color = MaterialTheme.colorScheme.primary,
+            fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text(SimpleDateFormat("MMMM d", Locale.getDefault()).format(date), color = Color.White, fontSize = 40.sp,
             fontWeight = FontWeight.Bold, lineHeight = 44.sp)
     }
@@ -167,7 +232,7 @@ private fun DateHeader(now: Long) {
 @Composable
 private fun SuggestionsCard(apps: List<AppEntry>, loading: Boolean, onLaunch: (AppEntry) -> Unit) {
     Column(Modifier.fillMaxWidth().glass().padding(18.dp)) {
-        Text("Suggestions", color = EmberColors.Secondary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text("Suggestions", color = EmberColors.Secondary, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(14.dp))
         if (apps.isEmpty()) Text(if (loading) "Loading…" else "Apps you open often will show up here. Swipe up for all apps.",
             color = EmberColors.Secondary, fontSize = 14.sp)
@@ -176,7 +241,7 @@ private fun SuggestionsCard(apps: List<AppEntry>, loading: Boolean, onLaunch: (A
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onLaunch(entry) }.padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     AppIcon(entry, 54.dp)
-                    Text(entry.label, color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Text(entry.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 6.dp))
                 }
             }
@@ -189,8 +254,8 @@ private fun SuggestionsCard(apps: List<AppEntry>, loading: Boolean, onLaunch: (A
 private fun ClockCard(now: Long) {
     val date = Date(now)
     Column(Modifier.size(150.dp).glass().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-        Text("LOCAL TIME", color = EmberColors.Secondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(date), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+        Text("LOCAL TIME", color = EmberColors.Secondary, style = MaterialTheme.typography.labelMedium)
+        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(date), color = MaterialTheme.colorScheme.onSurface, fontSize = 36.sp, fontWeight = FontWeight.Bold)
         Text(SimpleDateFormat("EEE", Locale.getDefault()).format(date), color = EmberColors.Secondary, fontSize = 14.sp)
     }
 }
@@ -199,7 +264,7 @@ private fun ClockCard(now: Long) {
 private fun AccessCard() {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth().glass().clickable { context.startActivity(Intent(context, SettingsActivity::class.java)) }.padding(16.dp)) {
-        Text("Finish setting up Ember", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text("Finish setting up Ember", style = MaterialTheme.typography.titleSmall)
         Text("Allow notification access for the rail, the notification page and the glowing pill.", color = EmberColors.Secondary,
             fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
     }

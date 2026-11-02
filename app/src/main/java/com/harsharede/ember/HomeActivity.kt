@@ -15,12 +15,12 @@ import kotlinx.coroutines.launch
 
 /** Ember's Home: the Today column, the status rail and dock; swipe up for apps, down for notifications. */
 class HomeActivity : ComponentActivity() {
-    private val layers = HomeLayers()
+    private val requests = HomeRequests()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { EmberTheme { HomeScreen(layers) } }
+        setContent { EmberTheme { HomeScreen(requests, onAddWidget = { info -> Widgets.add(this, info) }) } }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 EmberApp.instance.prefs.hideStatusBar.collect { hide -> applyStatusBar(hide) }
@@ -35,10 +35,28 @@ class HomeActivity : ComponentActivity() {
         if (hide) controller.hide(WindowInsetsCompat.Type.statusBars()) else controller.show(WindowInsetsCompat.Type.statusBars())
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Widgets only update while Home is visible, like every launcher.
+        runCatching { Widgets.host.startListening() }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        runCatching { Widgets.host.stopListening() }
+    }
+
+    @Deprecated("Widget binding and setup screens still report back here")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        Widgets.onResult(this, requestCode, resultCode)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // The Home button while already home: back to the plain Home screen.
-        if (intent.action == Intent.ACTION_MAIN) layers.closeAll()
+        if (intent.action == Intent.ACTION_MAIN) requests.closeAll++
     }
 
     override fun onResume() { super.onResume(); resumed = true }
