@@ -59,8 +59,8 @@ object NowPlaying {
 
     private fun publish() {
         val c = controller ?: run { _info.value = null; return }
-        val meta = c.metadata
-        val title = meta?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+        val meta = c.metadata ?: run { _info.value = null; return }
+        val title = meta.getString(MediaMetadata.METADATA_KEY_TITLE) ?: meta.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
         if (title.isNullOrBlank()) { _info.value = null; return }
         val artist = meta.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: meta.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE).orEmpty()
         val art = (meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: meta.getBitmap(MediaMetadata.METADATA_KEY_ART)
