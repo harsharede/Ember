@@ -90,6 +90,14 @@ class Prefs(context: Context) {
     private val _animCards = MutableStateFlow(sp.getBoolean(KEY_ANIM_CARDS, true))
     /** Home's cards and widgets fall into place when Home comes back. */
     val animCards: StateFlow<Boolean> = _animCards.asStateFlow()
+    private val _iconStyle = MutableStateFlow(sp.getInt(KEY_ICON_STYLE, EntranceStyle.SCATTER.ordinal))
+    /** How dock icons come back ([EntranceStyle] ordinal). */
+    val iconStyle: StateFlow<Int> = _iconStyle.asStateFlow()
+    private val _cardStyle = MutableStateFlow(sp.getInt(KEY_CARD_STYLE, EntranceStyle.FLOAT.ordinal))
+    /** How Home's cards come back ([EntranceStyle] ordinal). */
+    val cardStyle: StateFlow<Int> = _cardStyle.asStateFlow()
+    fun setIconStyle(v: Int) { _iconStyle.value = v; sp.edit().putInt(KEY_ICON_STYLE, v).apply() }
+    fun setCardStyle(v: Int) { _cardStyle.value = v; sp.edit().putInt(KEY_CARD_STYLE, v).apply() }
     fun setAnimIcons(on: Boolean) { _animIcons.value = on; sp.edit().putBoolean(KEY_ANIM_ICONS, on).apply() }
     fun setAnimCards(on: Boolean) { _animCards.value = on; sp.edit().putBoolean(KEY_ANIM_CARDS, on).apply() }
     fun setRailWidth(dp: Int) { _railWidth.value = dp; sp.edit().putInt(KEY_RAIL_WIDTH, dp).apply() }
@@ -340,6 +348,8 @@ class Prefs(context: Context) {
         private const val KEY_PAGES = "pages"
         private const val KEY_RAIL_WIDTH = "rail_width"
         private const val KEY_ANIM_ICONS = "anim_icons"
+        private const val KEY_ICON_STYLE = "icon_style"
+        private const val KEY_CARD_STYLE = "card_style"
         private const val KEY_ANIM_CARDS = "anim_cards"
         private const val KEY_WALLPAPER_PAGE = "wallpaper_page"
         private const val KEY_DOCK_HEIGHT = "dock_height"

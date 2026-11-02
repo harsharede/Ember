@@ -125,6 +125,10 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val iconsFall = animIcons && systemAnimations
     val cardsFall = animCards && systemAnimations
     val entrance = remember { Entrance() }
+    val iconStyle by app.prefs.iconStyle.collectAsStateWithLifecycle()
+    val cardStyle by app.prefs.cardStyle.collectAsStateWithLifecycle()
+    entrance.iconStyle = EntranceStyle.entries.getOrElse(iconStyle) { EntranceStyle.SCATTER }
+    entrance.cardStyle = EntranceStyle.entries.getOrElse(cardStyle) { EntranceStyle.FLOAT }
     // The pages: Today, any widget pages, and last (if on) a page with nothing but the wallpaper.
     val homePager = rememberPagerState { pageCount + if (wallpaperPage) 1 else 0 }
     val totalPages = pageCount + if (wallpaperPage) 1 else 0

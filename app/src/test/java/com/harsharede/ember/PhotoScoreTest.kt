@@ -65,14 +65,17 @@ class PhotoScoreTest {
         assertEquals(null, placeName(null, null, null, null))
     }
 
-    @Test fun `falling into place starts above, lands exactly, and is staggered`() {
-        assertEquals(0f, bounceOut(0f), 1e-4f); assertEquals(1f, bounceOut(1f), 1e-4f)
-        assertEquals(0f, backOut(0f), 1e-4f); assertEquals(1f, backOut(1f), 1e-4f)
-        assertTrue(backOut(.7f) > 1f) // overshoots before settling
-        // The first icon is under way before the fifth has started; at the end of the clock all are in place.
-        assertTrue(Entrance.fraction(.1f, 0, Entrance.Kind.ICON) > 0f)
-        assertEquals(0f, Entrance.fraction(.1f, 5, Entrance.Kind.ICON), 0f)
-        assertEquals(1f, Entrance.fraction(1f, 30, Entrance.Kind.ICON), 0f)
-        assertEquals(1f, Entrance.fraction(1f, 30, Entrance.Kind.CARD), 0f)
+    @Test fun `coming back into place springs, overshoots, settles and is staggered`() {
+        val k = Entrance.Kind.ICON
+        assertEquals(0f, Entrance.spring(0f, k.stiffness, k.damping), 1e-4f)
+        assertEquals(1f, Entrance.spring(2f, k.stiffness, k.damping), 1e-3f)
+        val peak = (1..60).maxOf { Entrance.spring(it / 100f, k.stiffness, k.damping) }
+        assertTrue("overshoot $peak", peak > 1.05f)
+        // The first icon is moving before the fifth has set off; by the end of the clock even the last is at rest.
+        assertTrue(Entrance.elapsed(.05f, 0, k) > 0f)
+        assertEquals(0f, Entrance.elapsed(.05f, 5, k), 0f)
+        val last = Entrance.elapsed(1f, 40, Entrance.Kind.CARD)
+        assertEquals(1f, Entrance.spring(last, Entrance.Kind.CARD.stiffness, Entrance.Kind.CARD.damping), 1e-3f)
+        assertTrue(Entrance.jitter(3, 1) in -1f..1f)
     }
 }

@@ -120,6 +120,8 @@ class SettingsActivity : ComponentActivity() {
         val stackSeconds by prefs.stackSeconds.collectAsStateWithLifecycle()
         val animIcons by prefs.animIcons.collectAsStateWithLifecycle()
         val animCards by prefs.animCards.collectAsStateWithLifecycle()
+        val iconStyle by prefs.iconStyle.collectAsStateWithLifecycle()
+        val cardStyle by prefs.cardStyle.collectAsStateWithLifecycle()
         val isHome = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
         val hasAccess = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
         val canOverlay = Settings.canDrawOverlays(this)
@@ -144,8 +146,14 @@ class SettingsActivity : ComponentActivity() {
                     }
                 }
                 Group("Animations") {
-                    Toggle("Dock icons fall into place", "When you come back to Home, the dock's icons drop into line with a bounce. Off: they just stay put.", animIcons) { prefs.setAnimIcons(it) }
-                    Toggle("Home cards fall into place", "The date, Smart Stack and widgets drop in when you come back to Home. Off: no animation.", animCards) { prefs.setAnimCards(it) }
+                    val styles = EntranceStyle.entries.map { it.ordinal to it.label }
+                    Toggle("Dock icons come back into place", "When you return to Home, one after another. Off: they just stay put.", animIcons) { prefs.setAnimIcons(it) }
+                    if (animIcons) Choice("Dock icons", styles, iconStyle) { prefs.setIconStyle(it) }
+                    Toggle("Home cards come back into place", "The date, Smart Stack and widgets. Off: no animation.", animCards) { prefs.setAnimCards(it) }
+                    if (animCards) Choice("Home cards", styles, cardStyle) { prefs.setCardStyle(it) }
+                    Text("Drop: falls into place and lands with a spring. Scatter: starts scattered and tilted, then falls into line. " +
+                        "Float: rises gently. Pop: grows with a springy pop. Go back to Home to see it.", color = EmberColors.Secondary,
+                        style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                 }
 
                 // Android 13+ blocks notification access for apps installed from a file until this is allowed.

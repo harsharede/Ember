@@ -67,8 +67,8 @@ fun LookSheet(onClose: () -> Unit) {
             }
             Text("Coming back to Home", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 18.dp))
-            SwitchRow("Dock icons fall into place", "One after another, with a little bounce", animIcons) { prefs.setAnimIcons(it) }
-            SwitchRow("Home cards fall into place", "The date, Smart Stack and widgets drop in", animCards) { prefs.setAnimCards(it) }
+            SwitchRow("Dock icons come back into place", "One after another; pick the style in Settings › Animations", animIcons) { prefs.setAnimIcons(it) }
+            SwitchRow("Home cards come back into place", "The date, Smart Stack and widgets", animCards) { prefs.setAnimCards(it) }
         }
     }
 }
