@@ -13,6 +13,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -71,9 +72,21 @@ object Light {
         internal set
     @Volatile private var launchedAt = 0L
 
+    private val _charging = MutableStateFlow(false)
+    /** Showing because the phone was plugged in with the screen off (Settings › Lock screen light › Charging light). */
+    val charging: StateFlow<Boolean> = _charging.asStateFlow()
+
+    /** Plugged in with the screen off: light up with the battery level. */
+    fun showCharging(context: Context) { _charging.value = true; launch(context) }
+    fun stopCharging() { _charging.value = false }
+
     /** Light up for [item], or add it to a light that's already on. */
     fun show(context: Context, item: NotifItem) {
         _items.value = listOf(item) + _items.value.filter { it.key != item.key }
+        launch(context)
+    }
+
+    private fun launch(context: Context) {
         if (showing) return
         val now = System.currentTimeMillis()
         if (now - launchedAt < 4_000) return // already on its way
@@ -92,7 +105,7 @@ object Light {
         }, 1_500)
     }
 
-    internal fun clear() { _items.value = emptyList() }
+    internal fun clear() { _items.value = emptyList(); _charging.value = false }
 }
 
 /** The app's notification colour, unless it set none or picked one too dark to glow on black. */
@@ -191,25 +204,41 @@ class LightActivity : ComponentActivity() {
 
 @Composable
 private fun LightScreen(dark: Boolean, onTap: () -> Unit, onSwipeUp: () -> Unit, onDark: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = EmberApp.instance.prefs
     val minutes by prefs.lightMinutes.collectAsStateWithLifecycle()
     val showIcon by prefs.lightIcon.collectAsStateWithLifecycle()
+    val cycle by prefs.lightCycle.collectAsStateWithLifecycle()
+    val musicBars by prefs.lightMusic.collectAsStateWithLifecycle()
     val wanted by Light.items.collectAsStateWithLifecycle()
+    val charging by Light.charging.collectAsStateWithLifecycle()
     val live by NotificationStore.items.collectAsStateWithLifecycle()
+    val playing = NowPlaying.info.collectAsStateWithLifecycle().value?.playing == true
     // Only what's still there: one read on another device or dismissed elsewhere drops out of the light.
     val items = remember(wanted, live) { val keys = live.associateBy { it.key }; wanted.mapNotNull { keys[it.key] } }
-    LaunchedEffect(items.isEmpty(), wanted.isEmpty()) { if (wanted.isNotEmpty() && items.isEmpty()) onDark() }
+    LaunchedEffect(items.isEmpty(), wanted.isEmpty(), charging) { if (items.isEmpty() && !charging && (wanted.isNotEmpty() || !charging)) onDark() }
     LaunchedEffect(minutes) { delay(minutes * 60_000L); onDark() }
 
     // An LED's slow blink: a second on, a few off, with short fades, so the screen redraws only while it changes.
+    // With several apps waiting, each blink takes the next app's colour.
     var lit by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { while (true) { lit = true; delay(1_400); lit = false; delay(2_600) } }
+    var turn by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { lit = true; delay(1_400); lit = false; delay(2_600); turn++ } }
     val glow by animateFloatAsState(if (lit) 1f else .1f, tween(500), label = "blink")
     // Move a few pixels every minute so the same pixels aren't lit for hours.
     var shift by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); shift = (shift + 1) % 4 } }
+    // Battery level, for the charging light.
+    var battery by remember { mutableIntStateOf(0) }
+    LaunchedEffect(charging) {
+        while (charging) {
+            battery = context.getSystemService(android.os.BatteryManager::class.java).getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            delay(30_000)
+        }
+    }
 
     val fallback = MaterialTheme.colorScheme.primary.toArgb()
+    val colors = remember(items, fallback) { items.map { lightColor(it.color, fallback) }.distinct() }
     val density = LocalDensity.current
     Box(Modifier.fillMaxSize().background(Color.Black)
         .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) }
@@ -218,9 +247,12 @@ private fun LightScreen(dark: Boolean, onTap: () -> Unit, onSwipeUp: () -> Unit,
             detectVerticalDragGestures(onDragStart = { travelled = 0f },
                 onDragEnd = { if (travelled < -with(density) { 80.dp.toPx() }) onSwipeUp() }) { change, dy -> change.consume(); travelled += dy }
         }) {
-        val newest = items.firstOrNull()
-        if (!dark && newest != null) {
-            val color = Color(lightColor(newest.color, fallback))
+        if (!dark && (items.isNotEmpty() || charging)) {
+            val color = when {
+                items.isEmpty() -> Color(0xFF34C759) // charging only: green
+                cycle && colors.size > 1 -> Color(colors[turn % colors.size])
+                else -> Color(colors.firstOrNull() ?: fallback)
+            }
             Row(Modifier.align(Alignment.TopStart)
                 .padding(start = 24.dp, top = 14.dp)
                 .offset(x = (shift % 2 * 3).dp, y = (shift / 2 * 3).dp)
@@ -237,8 +269,24 @@ private fun LightScreen(dark: Boolean, onTap: () -> Unit, onSwipeUp: () -> Unit,
                 if (showIcon) items.map { it.packageName }.distinct().take(3).forEach { pkg ->
                     PackageIcon(pkg, 13.dp, Modifier.padding(horizontal = 1.dp).clip(RoundedCornerShape(50)))
                 }
-                Box(Modifier.width(if (showIcon) 6.dp else 26.dp))
+                if (musicBars && playing) MusicBars()
+                if (charging) androidx.compose.material3.Text("⚡$battery%", color = Color.Black, fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    modifier = Modifier.padding(horizontal = 3.dp))
+                Box(Modifier.width(if (showIcon || charging || (musicBars && playing)) 4.dp else 26.dp))
             }
+        }
+    }
+}
+
+/** Three little bars that bounce while music plays. */
+@Composable
+private fun MusicBars() {
+    val t by androidx.compose.animation.core.rememberInfiniteTransition(label = "bars").animateFloat(0f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(tween(900, easing = androidx.compose.animation.core.LinearEasing)), label = "t")
+    Row(Modifier.padding(horizontal = 3.dp).height(12.dp), verticalAlignment = Alignment.Bottom) {
+        listOf(0f, .33f, .66f).forEach { phase ->
+            val h = .3f + .7f * ((kotlin.math.sin((t + phase) * 2 * Math.PI).toFloat() + 1f) / 2f)
+            Box(Modifier.padding(horizontal = 1.dp).width(2.dp).height((12 * h).dp).background(Color.Black.copy(alpha = .8f), RoundedCornerShape(1.dp)))
         }
     }
 }

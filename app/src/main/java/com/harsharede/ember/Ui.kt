@@ -95,7 +95,8 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(28.dp), alpha: Float = Loca
 @Composable
 fun AppIcon(app: AppEntry, size: Dp, modifier: Modifier = Modifier) {
     val px = with(LocalDensity.current) { size.roundToPx() }
-    val icon by produceState<ImageBitmap?>(null, app.key, px) {
+    val version by EmberApp.instance.apps.iconVersion.collectAsState()
+    val icon by produceState<ImageBitmap?>(null, app.key, px, version) {
         value = withContext(Dispatchers.IO) { EmberApp.instance.apps.icon(app, px) }
     }
     IconImage(icon, size, modifier)
@@ -104,7 +105,8 @@ fun AppIcon(app: AppEntry, size: Dp, modifier: Modifier = Modifier) {
 @Composable
 fun PackageIcon(packageName: String, size: Dp, modifier: Modifier = Modifier) {
     val px = with(LocalDensity.current) { size.roundToPx() }
-    val icon by produceState<ImageBitmap?>(null, packageName, px) {
+    val version by EmberApp.instance.apps.iconVersion.collectAsState()
+    val icon by produceState<ImageBitmap?>(null, packageName, px, version) {
         value = withContext(Dispatchers.IO) { EmberApp.instance.apps.iconForPackage(packageName, px) }
     }
     IconImage(icon, size, modifier)

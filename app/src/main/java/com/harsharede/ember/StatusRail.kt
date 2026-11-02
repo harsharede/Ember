@@ -298,9 +298,9 @@ fun WallpaperMini(modifier: Modifier = Modifier) {
         when {
             changing -> "Finding a photo…"
             c == null -> "From your photos"
-            c.place != null -> listOfNotNull(c.place, date).joinToString("  ·  ")
-            !hasPlaceAccess -> listOfNotNull(date, "Tap to show where").joinToString("  ·  ")
-            else -> date ?: "From your photos"
+            c.place != null -> listOfNotNull(memoryLabel(c.yearsAgo), c.place, date).joinToString("  ·  ")
+            !hasPlaceAccess -> listOfNotNull(memoryLabel(c.yearsAgo), date, "Tap to show where").joinToString("  ·  ")
+            else -> listOfNotNull(memoryLabel(c.yearsAgo), date).joinToString("  ·  ").ifEmpty { "From your photos" }
         }
     }
     val fill = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .75f)
@@ -346,4 +346,11 @@ private fun MiniButton(icon: ImageVector, label: String, enabled: Boolean, tint:
     Box(Modifier.size(34.dp).clip(CircleShape).background(fill).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, label, Modifier.size(16.dp), tint = (tint ?: MaterialTheme.colorScheme.onSurface).copy(alpha = if (enabled) .9f else .35f))
     }
+}
+
+/** "3 years ago today", for an On this day wallpaper. */
+fun memoryLabel(yearsAgo: Int): String? = when {
+    yearsAgo <= 0 -> null
+    yearsAgo == 1 -> "1 year ago today"
+    else -> "$yearsAgo years ago today"
 }

@@ -89,6 +89,7 @@ object CardData {
             if ("card:calendar" in items && granted(app, Manifest.permission.READ_CALENDAR)) runCatching { _events.value = upcoming(app) }
         }
         WeatherStore.refresh(context)
+        if ("card:screentime" in items) ScreenTime.refresh(context)
     }
 
     fun granted(context: Context, permission: String) = context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED

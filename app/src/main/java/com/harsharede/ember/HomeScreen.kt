@@ -102,7 +102,11 @@ class HomeRequests {
 fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidgetProviderInfo, Widgets.Target, Int) -> Unit, onAutoPick: () -> Unit) {
     val context = LocalContext.current
     val app = EmberApp.instance
-    val apps by app.apps.apps.collectAsStateWithLifecycle()
+    val allApps by app.apps.apps.collectAsStateWithLifecycle()
+    val hiddenApps by app.prefs.hiddenApps.collectAsStateWithLifecycle()
+    val focusApps by app.prefs.focusApps.collectAsStateWithLifecycle()
+    val focusUntil by app.prefs.focusUntil.collectAsStateWithLifecycle()
+    var focusSheet by remember { mutableStateOf(false) }
     val dockKeys by app.prefs.dock.collectAsStateWithLifecycle()
     val launches by app.prefs.launches.collectAsStateWithLifecycle()
     val hidden by app.prefs.hiddenStatus.collectAsStateWithLifecycle()
@@ -176,7 +180,14 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val notesShown by remember { derivedStateOf { notes.visible } }
 
     // Only what's worth attention counts on the rail: not silent ones, not ones that can't be dismissed.
-    val counted = remember(notifications) { notifications.filter { !it.silent && !it.persistent } }
+    val focusOn = focusUntil > now
+    // What Home shows: everything except hidden apps, and except Focus's apps while Focus is on.
+    val apps = remember(allApps, hiddenApps, focusOn, focusApps) {
+        allApps.filter { it.packageName !in hiddenApps && !(focusOn && it.packageName in focusApps) }
+    }
+    val counted = remember(notifications, focusOn, focusApps) {
+        notifications.filter { !it.silent && !it.persistent && !(focusOn && it.packageName in focusApps) }
+    }
     val dock = remember(apps, dockKeys) { dockKeys.mapNotNull { key -> apps.firstOrNull { it.key == key } } }
     val suggestions = remember(apps, launches, dockKeys, now / 3_600_000) { suggest(apps, launches, dockKeys.toSet(), now) }
     val launch: (AppEntry) -> Unit = { entry -> app.apps.launch(entry); drawer.hide(); notes.hide() }
@@ -202,6 +213,12 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
         val heightPx = with(density) { maxHeight.toPx() }
         drawer.heightPx = heightPx * .8f
         notes.heightPx = heightPx * .8f
+        // Behind everything: the wallpaper's parallax copy, then the weather drawn over it.
+        ParallaxWallpaper(position = {
+            val last = (totalPages - 1).coerceAtLeast(1)
+            (homePager.currentPage + homePager.currentPageOffsetFraction) / last
+        })
+        WeatherEffects()
         Box(Modifier.fillMaxSize()
             .graphicsLayer {
                 // Home sinks back a little as a layer comes over it.
@@ -249,6 +266,14 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                         LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 90.dp)) {
                             if (page == 0) {
                                 item("date") { Box(Modifier.fallIn(entrance, 0, cardsFall, Entrance.Kind.CARD)) { DateHeader(now) } }
+                                if (focusOn) item("focus") {
+                                    // Focus is on: how long is left, and a tap to end it.
+                                    Row(Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primaryContainer)
+                                        .clickable { focusSheet = true }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(if (focusUntil == Long.MAX_VALUE) "Focus · on" else "Focus · ${((focusUntil - now) / 60_000 + 1)} min left",
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                                    }
+                                }
                                 item("stack") { Box(Modifier.fallIn(entrance, 1, cardsFall, Entrance.Kind.CARD)) {
                                     SmartStackCard(columnWidth, active = !drawerShown && !notesShown && !stackEditor && homePager.currentPage == 0, editing = editing,
                                         suggestions = { SuggestionsCard(suggestions, apps.isEmpty(), launch) },
@@ -318,6 +343,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                         val page = app.prefs.addPage()
                         scope.launch { delay(50); homePager.animateScrollToPage(page) } })
                     DropdownMenuItem({ Text("Customize look") }, { menu = false; lookSheet = true })
+                    DropdownMenuItem({ Text(if (focusOn) "Focus (on)" else "Focus…") }, { menu = false; focusSheet = true })
                     DropdownMenuItem({ Text("Edit Smart Stack") }, { menu = false; stackEditor = true })
                     DropdownMenuItem({ Text(if (editing) "Done editing" else "Edit Home") }, { menu = false; editing = !editing })
                     DropdownMenuItem({ Text("Wallpaper") }, { menu = false
@@ -357,6 +383,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                 onAutoPick = onAutoPick, onClose = { stackEditor = false })
         }
         if (lookSheet) LookSheet(onClose = { lookSheet = false })
+        if (focusSheet) FocusSheet(onClose = { focusSheet = false })
         AnimatedVisibility(requests.pickWidget, enter = fadeIn(), exit = fadeOut()) {
             WidgetPicker(onPick = { info -> requests.pickWidget = false; if (requests.pickTarget == Widgets.Target.HOME) editing = true
                 onAddWidget(info, requests.pickTarget, requests.pickPage) },

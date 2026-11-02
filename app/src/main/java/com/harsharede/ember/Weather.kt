@@ -42,7 +42,9 @@ object WeatherStore {
     val fahrenheit: Boolean get() = Locale.getDefault().country in setOf("US", "LR", "MM", "BS", "BZ", "KY", "PW")
 
     fun refresh(context: Context, force: Boolean = false) {
-        if ("card:weather" !in EmberApp.instance.prefs.stackItems.value) return
+        val prefs = EmberApp.instance.prefs
+        // Needed by the Weather card, or by the weather drawn over Home.
+        if ("card:weather" !in prefs.stackItems.value && !(prefs.weatherEffects.value && prefs.weatherPlace.value != null)) return
         val last = _now.value
         if (!force && last != null && System.currentTimeMillis() - last.at < 30 * 60_000L) return
         val app = context.applicationContext

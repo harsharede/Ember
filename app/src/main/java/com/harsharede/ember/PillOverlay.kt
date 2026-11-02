@@ -57,7 +57,7 @@ class PillOverlay(private val context: Context) {
         context.registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), Context.RECEIVER_EXPORTED)
         scope.launch {
             NotificationStore.arrivals.collect { item ->
-                if (!EmberApp.instance.prefs.pillEnabled.value) return@collect
+                if (!EmberApp.instance.prefs.pillEnabled.value || focusSilences(item.packageName)) return@collect
                 pending.removeAll { it.key == item.key }
                 pending.add(0, item)
                 // On Ember's own Home the rail already shows it; elsewhere the pill lights up.

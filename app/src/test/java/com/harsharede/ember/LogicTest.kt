@@ -145,4 +145,49 @@ class LogicTest {
         assertEquals("Tools", bullets.groups["com.android.chrome"])
         assertEquals(emptyMap<String, String>(), parseAiGroups("hello there", labels).groups)
     }
+
+    @Test fun `drawer search does sums`() {
+        assertEquals(216.0, evaluateExpression("12x18")!!, 1e-9)
+        assertEquals(84.0, evaluateExpression("12*(3+4)")!!, 1e-9)
+        assertEquals(1024.0, evaluateExpression("2^10")!!, 1e-9)
+        assertEquals(36.0, evaluateExpression("15% of 240")!!, 1e-9)
+        assertEquals(264.0, evaluateExpression("240 + 10%")!!, 1e-9)
+        assertEquals(2.5, evaluateExpression("10 ÷ 4")!!, 1e-9)
+        assertEquals(null, evaluateExpression("whatsapp"))
+        assertEquals(null, evaluateExpression("2048"))
+        assertEquals(null, evaluateExpression("7-zip"))
+        assertEquals(null, evaluateExpression("1/0"))
+    }
+
+    @Test fun `drawer search converts units`() {
+        assertEquals("10 km = 6.21 mi", convertUnits("10 km in mi"))
+        assertEquals("100 f = 37.78 c", convertUnits("100 f to c"))
+        assertEquals("1 kg = 2.2 lb", convertUnits("1 kg to lb"))
+        assertEquals(null, convertUnits("10 km in kg"))
+        assertEquals(null, convertUnits("spotify"))
+    }
+
+    @Test fun `on this day finds the same date in earlier years`() {
+        fun at(y: Int, m: Int, d: Int) = Calendar.getInstance().apply { set(y, m, d, 12, 0, 0) }.timeInMillis
+        assertEquals(3, yearsAgoToday(at(2023, Calendar.NOVEMBER, 2), at(2026, Calendar.NOVEMBER, 2)))
+        assertEquals(0, yearsAgoToday(at(2023, Calendar.NOVEMBER, 3), at(2026, Calendar.NOVEMBER, 2)))
+        assertEquals(0, yearsAgoToday(at(2026, Calendar.NOVEMBER, 2), at(2026, Calendar.NOVEMBER, 2)))
+        assertEquals("1 year ago today", memoryLabel(1)); assertEquals(null, memoryLabel(0))
+    }
+
+    @Test fun `screen time adds up time in front, ending at pauses and screen off`() {
+        val events = listOf(
+            Triple(1_000L, "a", 1), Triple(61_000L, "b", 1),   // a: 60 s, then b comes to the front
+            Triple(121_000L, "b", 2),                          // b: 60 s
+            Triple(181_000L, "a", 1), Triple(241_000L, "", 3), // a: 60 s more, then the screen goes off
+        )
+        val t = foregroundTime(events, 0L, 300_000L)
+        assertEquals(120_000L, t["a"]); assertEquals(60_000L, t["b"])
+        assertEquals("2 h 14 min", formatDuration((2 * 60 + 14) * 60_000L)); assertEquals("45 min", formatDuration(45 * 60_000L))
+    }
+
+    @Test fun `weather effects match the forecast`() {
+        assertEquals(WeatherKind.RAIN, weatherKind(63, true)); assertEquals(WeatherKind.STARS, weatherKind(0, false))
+        assertEquals(WeatherKind.NONE, weatherKind(3, true)); assertEquals(WeatherKind.STORM, weatherKind(95, true))
+    }
 }

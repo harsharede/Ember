@@ -45,6 +45,13 @@ class AppsRepository(private val context: Context) {
     private val icons = LruCache<String, ImageBitmap>(300)
     private val infos = HashMap<String, LauncherActivityInfo>()
 
+    private val _iconVersion = MutableStateFlow(0)
+    /** Goes up when every icon has to be drawn again (a new icon pack). */
+    val iconVersion: StateFlow<Int> = _iconVersion.asStateFlow()
+
+    /** Forget every cached icon, so the next draw uses the chosen icon pack (or the apps' own). */
+    fun reloadIcons() { icons.evictAll(); _iconVersion.value++ }
+
     private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
     /** Every launchable app, sorted A to Z the way the phone's language sorts. */
     val apps: StateFlow<List<AppEntry>> = _apps.asStateFlow()
@@ -90,7 +97,11 @@ class AppsRepository(private val context: Context) {
     fun icon(app: AppEntry, sizePx: Int): ImageBitmap? {
         icons.get(app.key)?.let { return it }
         val info = synchronized(infos) { infos[app.key] } ?: return null
-        val bitmap = runCatching { info.getBadgedIcon(0).toBitmap(sizePx, sizePx).asImageBitmap() }.getOrNull() ?: return null
+        // The icon pack's drawing where it has one (still badged for work apps), else the app's own icon.
+        val pack = EmberApp.instance.prefs.iconPack.value
+        val fromPack = pack?.let { IconPacks.drawable(context, it, app.component) }
+            ?.let { if (app.work) context.packageManager.getUserBadgedIcon(it, app.user) else it }
+        val bitmap = runCatching { (fromPack ?: info.getBadgedIcon(0)).toBitmap(sizePx, sizePx).asImageBitmap() }.getOrNull() ?: return null
         icons.put(app.key, bitmap)
         return bitmap
     }

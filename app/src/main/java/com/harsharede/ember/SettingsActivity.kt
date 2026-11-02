@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -57,6 +58,7 @@ class SettingsActivity : ComponentActivity() {
     private var refresh by mutableIntStateOf(0)
 
     private val homeRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refresh++ }
+    private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
 
     private val photoAccess = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         refresh++
@@ -118,6 +120,12 @@ class SettingsActivity : ComponentActivity() {
         val cameraOnly by prefs.wallpaperCameraOnly.collectAsStateWithLifecycle()
         val wpCard by prefs.wallpaperCard.collectAsStateWithLifecycle()
         val stackSeconds by prefs.stackSeconds.collectAsStateWithLifecycle()
+        val onThisDay by prefs.onThisDay.collectAsStateWithLifecycle()
+        val lightCycle by prefs.lightCycle.collectAsStateWithLifecycle()
+        val lightMusic by prefs.lightMusic.collectAsStateWithLifecycle()
+        val chargingLight by prefs.chargingLight.collectAsStateWithLifecycle()
+        val limits by prefs.limits.collectAsStateWithLifecycle()
+        val usage by ScreenTime.today.collectAsStateWithLifecycle()
         val animIcons by prefs.animIcons.collectAsStateWithLifecycle()
         val animCards by prefs.animCards.collectAsStateWithLifecycle()
         val iconStyle by prefs.iconStyle.collectAsStateWithLifecycle()
@@ -171,6 +179,9 @@ class SettingsActivity : ComponentActivity() {
                         Choice("Keep glowing for", listOf(15 to "15 min", 30 to "30 min", 60 to "1 hour", 180 to "3 hours"), lightMinutes) { prefs.setLightMinutes(it) }
                         Choice("Brightness", listOf(0 to "Low", 1 to "Medium", 2 to "High"), lightBrightness) { prefs.setLightBrightness(it) }
                         Toggle("Show app icons in the light", "Off: just a coloured light, nothing to read from across the room", lightIcon) { prefs.setLightIcon(it) }
+                        Toggle("Cycle app colours", "With several apps waiting, each blink takes the next app's colour", lightCycle) { prefs.setLightCycle(it) }
+                        Toggle("Music bars", "Little bouncing bars in the light while something plays", lightMusic) { prefs.setLightMusic(it) }
+                        Toggle("Charging light", "Plugging in with the screen off shows a green light with the battery level", chargingLight) { prefs.setChargingLight(it) }
                         if (!canOverlay) Text("Needs \"Display over other apps\" (above) to wake the screen.", color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     }
@@ -196,6 +207,7 @@ class SettingsActivity : ComponentActivity() {
                         }
                         Toggle("Lock screen too", null, wpLock) { prefs.setWallpaperLock(it) }
                         Toggle("Camera photos only", "Leave out screenshots, downloads and chat images", cameraOnly) { prefs.setWallpaperCameraOnly(it) }
+                        Toggle("On this day", "Once a day, a photo taken on this date in an earlier year (\"3 years ago today\")", onThisDay) { prefs.setOnThisDay(it) }
                         Toggle("Wallpaper button on Home", "A tiny button in the bottom-left corner: tap for like, new photo and dislike", wpCard) { prefs.setWallpaperCard(it) }
                         Row_("New photo now") { Wallpapers.changeNow(this@SettingsActivity) }
                         Row_("Forget likes and dislikes") {
@@ -205,6 +217,38 @@ class SettingsActivity : ComponentActivity() {
                         Text("Timed changes wait until the screen is off or you're on Home: a new wallpaper changes the colours, " +
                             "and Android restarts open apps' screens for that.", color = EmberColors.Secondary,
                             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
+                    }
+                }
+
+                Group("Screen time") {
+                    if (!ScreenTime.hasAccess(this@SettingsActivity)) {
+                        Step("Usage access", false, "For the Screen time card and limits. Android shows how long each app was on screen; nothing leaves the phone.") {
+                            open(ScreenTime.accessIntent())
+                        }
+                    } else {
+                        androidx.compose.runtime.LaunchedEffect(Unit) { ScreenTime.refresh(this@SettingsActivity) }
+                        Text("Set a daily limit and Ember sends one gentle reminder when you pass it.", color = EmberColors.Secondary,
+                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
+                        val shown = (usage.keys.take(10) + limits.keys).distinct()
+                        shown.forEach { pkg -> LimitRow(pkg, usage[pkg] ?: 0L, limits[pkg]) }
+                        if (shown.isEmpty()) Text("No app time recorded yet today.", color = EmberColors.Secondary, modifier = Modifier.padding(16.dp))
+                    }
+                }
+
+                Group("Icons") {
+                    val packs = remember { IconPacks.installed(this@SettingsActivity) }
+                    val pack by prefs.iconPack.collectAsStateWithLifecycle()
+                    Toggle("Apps' own icons", null, pack == null) { if (it) { prefs.setIconPack(null); EmberApp.instance.apps.reloadIcons() } }
+                    packs.forEach { p ->
+                        Toggle(p.label, "Icon pack", pack == p.packageName) { on ->
+                            prefs.setIconPack(if (on) p.packageName else null); EmberApp.instance.apps.reloadIcons()
+                        }
+                    }
+                    if (packs.isEmpty()) Text("No icon packs installed. Any pack made for Nova, ADW or similar launchers works.",
+                        color = EmberColors.Secondary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
+                    Row_("Find icon packs on the Play Store") {
+                        open(Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=icon%20pack&c=apps")),
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=icon%20pack&c=apps")))
                     }
                 }
 
@@ -295,6 +339,33 @@ class SettingsActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    @Composable
+    private fun LimitRow(pkg: String, usedMs: Long, limit: Int?) {
+        var menu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        ListItem(
+            headlineContent = { Text(EmberApp.instance.apps.labelForPackage(pkg)) },
+            supportingContent = { Text(formatDuration(usedMs) + " today") },
+            leadingContent = { PackageIcon(pkg, 32.dp) },
+            trailingContent = {
+                androidx.compose.foundation.layout.Box {
+                    androidx.compose.material3.TextButton({ menu = true }) { Text(if (limit == null) "No limit" else "Limit ${formatDuration(limit * 60_000L)}") }
+                    androidx.compose.material3.DropdownMenu(menu, { menu = false }) {
+                        listOf(null, 15, 30, 60, 120, 180).forEach { m ->
+                            androidx.compose.material3.DropdownMenuItem({ Text(if (m == null) "No limit" else formatDuration(m * 60_000L)) }, {
+                                menu = false
+                                EmberApp.instance.prefs.setLimit(pkg, m)
+                                ScreenTime.schedule(this@SettingsActivity)
+                                if (m != null && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                                    notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            })
+                        }
+                    }
+                }
+            },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
     }
 
     @Composable

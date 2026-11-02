@@ -42,6 +42,8 @@ fun LookSheet(onClose: () -> Unit) {
     val dockCorner by prefs.dockCorner.collectAsStateWithLifecycle()
     val animIcons by prefs.animIcons.collectAsStateWithLifecycle()
     val animCards by prefs.animCards.collectAsStateWithLifecycle()
+    val parallax by prefs.parallax.collectAsStateWithLifecycle()
+    val weatherFx by prefs.weatherEffects.collectAsStateWithLifecycle()
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         scrimColor = Color.Transparent, containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .96f)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp).navigationBarsPadding()) {
@@ -79,6 +81,9 @@ fun LookSheet(onClose: () -> Unit) {
                 }
                 Switch(wallpaperPage, { prefs.setWallpaperPage(it) })
             }
+            Text("Wallpaper", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 18.dp))
+            SwitchRow("Parallax", "The wallpaper pans a little as you swipe between pages", parallax) { prefs.setParallax(it) }
+            SwitchRow("Weather on the wallpaper", "Rain, snow, fog, sun or stars to match the forecast (needs the Weather card's place)", weatherFx) { prefs.setWeatherEffects(it) }
             Text("Coming back to Home", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 18.dp))
             SwitchRow("Dock icons come back into place", "One after another; pick the style in Settings › Animations", animIcons) { prefs.setAnimIcons(it) }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.HourglassBottom
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.Widgets
@@ -68,6 +69,7 @@ private val CARDS = listOf(
     CardChoice("card:media", "Now playing", "Whatever's playing (YouTube, Spotify…), with controls. Shows only while something plays.", Icons.Rounded.MusicNote),
     CardChoice("card:calendar", "Up next", "Your next events. Needs Calendar.", Icons.Rounded.CalendarMonth),
     CardChoice("card:suggestions", "App suggestions", "The apps you open most.", Icons.Rounded.Lightbulb),
+    CardChoice("card:screentime", "Screen time", "Today's time per app; set limits in Settings › Screen time. Needs usage access.", Icons.Rounded.HourglassBottom),
 )
 
 /**
@@ -102,6 +104,10 @@ fun StackEditor(onAddWidget: () -> Unit, onAutoPick: () -> Unit, onClose: () -> 
             "card:people" -> if (CardData.granted(context, Manifest.permission.READ_CONTACTS)) prefs.addStackItem(item) else contacts.launch(Manifest.permission.READ_CONTACTS)
             "card:calendar" -> if (CardData.granted(context, Manifest.permission.READ_CALENDAR)) { prefs.addStackItem(item); CardData.refresh(context) }
                 else calendar.launch(Manifest.permission.READ_CALENDAR)
+            "card:screentime" -> {
+                prefs.addStackItem(item)
+                if (ScreenTime.hasAccess(context)) ScreenTime.refresh(context) else runCatching { context.startActivity(ScreenTime.accessIntent()) }
+            }
             else -> prefs.addStackItem(item)
         }
     }

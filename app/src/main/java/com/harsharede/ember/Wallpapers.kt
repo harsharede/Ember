@@ -49,7 +49,7 @@ object Wallpapers {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
 
-    data class Current(val id: Long, val takenAt: Long, val liked: Boolean, val place: String? = null) {
+    data class Current(val id: Long, val takenAt: Long, val liked: Boolean, val place: String? = null, val yearsAgo: Int = 0) {
         val uri: Uri get() = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
     }
 
@@ -67,7 +67,8 @@ object Wallpapers {
     fun init(context: Context) {
         val prefs = EmberApp.instance.prefs
         val id = prefs.wallpaperPhoto.value
-        if (id > 0) _current.value = Current(id, prefs.wallpaperTakenAt.value, id in prefs.likedPhotos.value, prefs.wallpaperPlace.value)
+        if (id > 0) _current.value = Current(id, prefs.wallpaperTakenAt.value, id in prefs.likedPhotos.value, prefs.wallpaperPlace.value,
+            prefs.wallpaperYearsAgo.value)
         schedule(context, restart = false)
         // A wallpaper from before places were shown: look its place up once.
         if (id > 0 && prefs.wallpaperPlace.value == null) lookUpPlace(context)
@@ -182,21 +183,32 @@ object Wallpapers {
         // Only the better half competes; within it, the higher the score the likelier.
         val cutoff = fresh.map { scores.getValue(it.id).total }.sorted().let { it.getOrElse(it.size / 2) { 0f } }
         val pool = fresh.filter { scores.getValue(it.id).total >= cutoff || it.id in liked }
-        val pick = pickWeighted(pool, { p ->
+        val weight: (Photo) -> Double = { p ->
             val s = scores.getValue(p.id)
             val portrait = if (p.portrait) 1.25 else 1.0
             Math.pow(s.total.toDouble(), 3.0) * portrait * (if (p.id in liked) 3.0 else 1.0)
-        }, Random.nextDouble()) ?: return@withContext
+        }
+        // On this day: the first change of the day picks a good photo taken on this date in an earlier year, if any.
+        val now = System.currentTimeMillis()
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date(now))
+        val memories = if (prefs.onThisDay.value && prefs.memoryDay.value != today)
+            known.filter { yearsAgoToday(it.takenAt, now) > 0 && scores.getValue(it.id).total >= .35f } else emptyList()
+        val memory = pickWeighted(memories, weight, Random.nextDouble())
+        val pick = memory ?: pickWeighted(pool, weight, Random.nextDouble()) ?: return@withContext
+        val yearsAgo = if (memory != null) yearsAgoToday(pick.takenAt, now) else 0
+        if (memory != null) prefs.setMemoryDay(today)
 
         val bitmap = render(context, pick, scores.getValue(pick.id)) ?: return@withContext
+        // Home's parallax uses a slightly wider copy; the system wallpaper is its middle.
         val which = if (prefs.wallpaperLock.value) WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK else WallpaperManager.FLAG_SYSTEM
         WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, which)
         bitmap.recycle()
         val place = runCatching { placeOf(context, pick.uri) }.getOrNull()
         prefs.setWallpaperPhoto(pick.id, pick.takenAt)
         prefs.setWallpaperPlace(place)
+        prefs.setWallpaperYearsAgo(yearsAgo)
         prefs.addRecentPhoto(pick.id, keep = (known.size / 3).coerceIn(1, 60))
-        _current.value = Current(pick.id, pick.takenAt, pick.id in liked, place)
+        _current.value = Current(pick.id, pick.takenAt, pick.id in liked, place, yearsAgo)
     }
 
     private data class Photo(val id: Long, val width: Int, val height: Int, val takenAt: Long) {
@@ -246,21 +258,40 @@ object Wallpapers {
         analyzePhoto(luma, w, h)
     }.getOrNull()
 
-    /** Decoded just large enough for the screen, then cropped to its shape around the subject. */
+    /**
+     * Decoded just large enough, cropped around the subject to a little wider than the screen (saved for Home's parallax),
+     * and the middle of that, the screen's shape, returned for the system wallpaper.
+     */
     private fun render(context: Context, photo: Photo, score: PhotoScore): Bitmap? = runCatching {
         val (screenW, screenH) = screenSize(context)
+        val wideW = (screenW * PARALLAX_WIDTH).toInt()
         val decoded = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, photo.uri)) { decoder, info, _ ->
             val w = info.size.width; val h = info.size.height
-            val scale = (if (w.toDouble() / h > screenW.toDouble() / screenH) screenH.toDouble() / h else screenW.toDouble() / w).coerceAtMost(1.0)
+            val scale = (if (w.toDouble() / h > wideW.toDouble() / screenH) screenH.toDouble() / h else wideW.toDouble() / w).coerceAtMost(1.0)
             decoder.setTargetSize((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1))
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
         }
-        val (l, t, cw, ch) = wallpaperCrop(decoded.width, decoded.height, screenW, screenH, score.focusX, score.focusY).toList()
+        val (l, t, cw, ch) = wallpaperCrop(decoded.width, decoded.height, wideW, screenH, score.focusX, score.focusY).toList()
         val cropped = Bitmap.createBitmap(decoded, l, t, cw, ch)
         if (cropped !== decoded) decoded.recycle()
-        if (cropped.width == screenW && cropped.height == screenH) cropped
-        else Bitmap.createScaledBitmap(cropped, screenW, screenH, true).also { if (it !== cropped) cropped.recycle() }
+        val wide = if (cropped.width == wideW && cropped.height == screenH) cropped
+            else Bitmap.createScaledBitmap(cropped, wideW, screenH, true).also { if (it !== cropped) cropped.recycle() }
+        runCatching {
+            File(context.filesDir, WIDE_FILE).outputStream().use { wide.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            _wideVersion.value++
+        }
+        val middle = Bitmap.createBitmap(wide, (wideW - screenW) / 2, 0, screenW, screenH)
+        if (middle !== wide) wide.recycle()
+        middle
     }.getOrNull()
+
+    /** How much wider than the screen the parallax copy is. */
+    const val PARALLAX_WIDTH = 1.3f
+    private const val WIDE_FILE = "wallpaper_wide.jpg"
+    private val _wideVersion = MutableStateFlow(0)
+    /** Goes up each time a new wide copy is saved, so Home reloads it. */
+    val wideVersion: StateFlow<Int> = _wideVersion.asStateFlow()
+    fun wideFile(context: Context): File = File(context.filesDir, WIDE_FILE)
 
     private fun screenSize(context: Context): Pair<Int, Int> {
         val display = context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
@@ -318,3 +349,12 @@ class WallpaperWorker(context: Context, params: WorkerParameters) : CoroutineWor
 fun placeName(vararg parts: String?): String? =
     parts.filterNotNull().map { it.trim() }.filter { it.isNotEmpty() && !it.first().isDigit() }
         .distinctBy { it.lowercase() }.take(3).joinToString(", ").ifEmpty { null }
+
+/** How many years ago today [taken] was (same month and day, an earlier year), or 0. */
+fun yearsAgoToday(taken: Long, now: Long): Int {
+    if (taken <= 0) return 0
+    val a = Calendar.getInstance().apply { timeInMillis = taken }
+    val b = Calendar.getInstance().apply { timeInMillis = now }
+    if (a.get(Calendar.MONTH) != b.get(Calendar.MONTH) || a.get(Calendar.DAY_OF_MONTH) != b.get(Calendar.DAY_OF_MONTH)) return 0
+    return (b.get(Calendar.YEAR) - a.get(Calendar.YEAR)).coerceAtLeast(0)
+}

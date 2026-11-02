@@ -264,6 +264,76 @@ class Prefs(context: Context) {
         val p = line.split(FIELD); if (p.size == 2 && p[0].isNotBlank() && p[1].isNotBlank()) p[0] to p[1] else null
     }.toMap()
 
+    // Hidden apps (behind fingerprint) and Focus mode.
+    private val _hiddenApps = MutableStateFlow(sp.getStringSet(KEY_HIDDEN_APPS, emptySet())!!.toSet())
+    /** Packages hidden from the drawer, dock, suggestions and search. Seen again only after unlocking. */
+    val hiddenApps: StateFlow<Set<String>> = _hiddenApps.asStateFlow()
+    fun hideApp(pkg: String) = saveSet(KEY_HIDDEN_APPS, _hiddenApps, _hiddenApps.value + pkg)
+    fun unhideApp(pkg: String) = saveSet(KEY_HIDDEN_APPS, _hiddenApps, _hiddenApps.value - pkg)
+    private val _focusApps = MutableStateFlow(sp.getStringSet(KEY_FOCUS_APPS, emptySet())!!.toSet())
+    /** The apps Focus mode puts away. */
+    val focusApps: StateFlow<Set<String>> = _focusApps.asStateFlow()
+    fun setFocusApp(pkg: String, on: Boolean) = saveSet(KEY_FOCUS_APPS, _focusApps, if (on) _focusApps.value + pkg else _focusApps.value - pkg)
+    private val _focusUntil = MutableStateFlow(sp.getLong(KEY_FOCUS_UNTIL, 0L))
+    /** When Focus ends (0: off; Long.MAX_VALUE: until turned off). */
+    val focusUntil: StateFlow<Long> = _focusUntil.asStateFlow()
+    fun setFocusUntil(t: Long) { _focusUntil.value = t; sp.edit().putLong(KEY_FOCUS_UNTIL, t).apply() }
+    fun focusActive(now: Long = System.currentTimeMillis()) = _focusUntil.value > now
+    private fun saveSet(key: String, flow: MutableStateFlow<Set<String>>, set: Set<String>) { flow.value = set; sp.edit().putStringSet(key, set).apply() }
+
+    // Icons, wallpaper extras, light styles, screen time.
+    private val _iconPack = MutableStateFlow(sp.getString(KEY_ICON_PACK, null))
+    /** The icon pack's package, or null for the apps' own icons. */
+    val iconPack: StateFlow<String?> = _iconPack.asStateFlow()
+    fun setIconPack(pkg: String?) { _iconPack.value = pkg; sp.edit().putString(KEY_ICON_PACK, pkg).apply() }
+    private val _onThisDay = MutableStateFlow(sp.getBoolean(KEY_ON_THIS_DAY, true))
+    /** Prefer photos taken on this day in past years, once a day. */
+    val onThisDay: StateFlow<Boolean> = _onThisDay.asStateFlow()
+    fun setOnThisDay(on: Boolean) { _onThisDay.value = on; sp.edit().putBoolean(KEY_ON_THIS_DAY, on).apply() }
+    private val _memoryDay = MutableStateFlow(sp.getString(KEY_MEMORY_DAY, null))
+    /** The last day an "On this day" photo was shown (yyyy-MM-dd). */
+    val memoryDay: StateFlow<String?> = _memoryDay.asStateFlow()
+    fun setMemoryDay(day: String?) { _memoryDay.value = day; sp.edit().putString(KEY_MEMORY_DAY, day).apply() }
+    private val _wallpaperYearsAgo = MutableStateFlow(sp.getInt(KEY_YEARS_AGO, 0))
+    /** For the current wallpaper: how many years ago today it was taken (0: not an "On this day" photo). */
+    val wallpaperYearsAgo: StateFlow<Int> = _wallpaperYearsAgo.asStateFlow()
+    fun setWallpaperYearsAgo(y: Int) { _wallpaperYearsAgo.value = y; sp.edit().putInt(KEY_YEARS_AGO, y).apply() }
+    private val _parallax = MutableStateFlow(sp.getBoolean(KEY_PARALLAX, true))
+    /** The wallpaper pans a little as Home's pages are swiped. */
+    val parallax: StateFlow<Boolean> = _parallax.asStateFlow()
+    fun setParallax(on: Boolean) { _parallax.value = on; sp.edit().putBoolean(KEY_PARALLAX, on).apply() }
+    private val _weatherEffects = MutableStateFlow(sp.getBoolean(KEY_WEATHER_FX, true))
+    /** Rain, snow, fog or sun drawn over Home to match the forecast. */
+    val weatherEffects: StateFlow<Boolean> = _weatherEffects.asStateFlow()
+    fun setWeatherEffects(on: Boolean) { _weatherEffects.value = on; sp.edit().putBoolean(KEY_WEATHER_FX, on).apply() }
+    private val _lightCycle = MutableStateFlow(sp.getBoolean(KEY_LIGHT_CYCLE, true))
+    /** With several apps waiting, the light takes each app's colour in turn. */
+    val lightCycle: StateFlow<Boolean> = _lightCycle.asStateFlow()
+    fun setLightCycle(on: Boolean) { _lightCycle.value = on; sp.edit().putBoolean(KEY_LIGHT_CYCLE, on).apply() }
+    private val _lightMusic = MutableStateFlow(sp.getBoolean(KEY_LIGHT_MUSIC, true))
+    /** Music bars in the light while something plays. */
+    val lightMusic: StateFlow<Boolean> = _lightMusic.asStateFlow()
+    fun setLightMusic(on: Boolean) { _lightMusic.value = on; sp.edit().putBoolean(KEY_LIGHT_MUSIC, on).apply() }
+    private val _chargingLight = MutableStateFlow(sp.getBoolean(KEY_CHARGING_LIGHT, false))
+    /** Plugging in with the screen off shows the light with the battery level. */
+    val chargingLight: StateFlow<Boolean> = _chargingLight.asStateFlow()
+    fun setChargingLight(on: Boolean) { _chargingLight.value = on; sp.edit().putBoolean(KEY_CHARGING_LIGHT, on).apply() }
+    private val _limits = MutableStateFlow(sp.getString(KEY_LIMITS, null).orEmpty().split(SEP).mapNotNull { line ->
+        line.split(FIELD).takeIf { it.size == 2 }?.let { p -> p[1].toIntOrNull()?.let { p[0] to it } } }.toMap())
+    /** Daily limits in minutes, per package, for the screen time nudge. */
+    val limits: StateFlow<Map<String, Int>> = _limits.asStateFlow()
+    fun setLimit(pkg: String, minutes: Int?) {
+        val map = if (minutes == null) _limits.value - pkg else _limits.value + (pkg to minutes)
+        _limits.value = map; sp.edit().putString(KEY_LIMITS, map.entries.joinToString(SEP) { "${it.key}$FIELD${it.value}" }).apply()
+    }
+    /** Nudges already sent today, so each limit nudges once ("yyyy-MM-dd|package"). */
+    fun nudged(key: String): Boolean = sp.getStringSet(KEY_NUDGED, emptySet())!!.contains(key)
+    fun markNudged(key: String) {
+        val today = key.substringBefore('|')
+        val kept = sp.getStringSet(KEY_NUDGED, emptySet())!!.filter { it.startsWith(today) }.toSet()
+        sp.edit().putStringSet(KEY_NUDGED, kept + key).apply()
+    }
+
     fun setLight(on: Boolean) { _light.value = on; sp.edit().putBoolean(KEY_LIGHT, on).apply() }
     fun setLightMinutes(m: Int) { _lightMinutes.value = m; sp.edit().putInt(KEY_LIGHT_MINUTES, m).apply() }
     fun setLightIcon(on: Boolean) { _lightIcon.value = on; sp.edit().putBoolean(KEY_LIGHT_ICON, on).apply() }
@@ -366,6 +436,20 @@ class Prefs(context: Context) {
         private const val KEY_RAIL_ALPHA = "rail_alpha"
         private const val KEY_CARD_ALPHA = "card_alpha"
         private const val KEY_LIGHT = "light"
+        private const val KEY_HIDDEN_APPS = "hidden_apps"
+        private const val KEY_FOCUS_APPS = "focus_apps"
+        private const val KEY_FOCUS_UNTIL = "focus_until"
+        private const val KEY_ICON_PACK = "icon_pack"
+        private const val KEY_ON_THIS_DAY = "on_this_day"
+        private const val KEY_MEMORY_DAY = "memory_day"
+        private const val KEY_YEARS_AGO = "years_ago"
+        private const val KEY_PARALLAX = "parallax"
+        private const val KEY_WEATHER_FX = "weather_fx"
+        private const val KEY_LIGHT_CYCLE = "light_cycle"
+        private const val KEY_LIGHT_MUSIC = "light_music"
+        private const val KEY_CHARGING_LIGHT = "charging_light"
+        private const val KEY_LIMITS = "limits"
+        private const val KEY_NUDGED = "nudged"
         private const val KEY_APP_GROUPS = "app_groups"
         private const val KEY_GROUP_ORDER = "group_order"
         private const val KEY_STACK = "stack"

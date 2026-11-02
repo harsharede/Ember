@@ -12,6 +12,16 @@ import android.service.notification.StatusBarNotification
  */
 class EmberNotificationListener : NotificationListenerService() {
     private var pill: PillOverlay? = null
+    /** Plugged in with the screen off: the charging light, if it's switched on. Unplugged: it goes out. */
+    private val power = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+            when (intent.action) {
+                android.content.Intent.ACTION_POWER_CONNECTED -> if (EmberApp.instance.prefs.chargingLight.value &&
+                    !getSystemService(PowerManager::class.java).isInteractive) Light.showCharging(context)
+                android.content.Intent.ACTION_POWER_DISCONNECTED -> Light.stopCharging()
+            }
+        }
+    }
     private val ranking = Ranking()
 
     override fun onListenerConnected() {
@@ -19,6 +29,11 @@ class EmberNotificationListener : NotificationListenerService() {
         NotificationStore.setConnected(true)
         pill = PillOverlay(this).also { it.start() }
         NowPlaying.start(this, android.content.ComponentName(this, EmberNotificationListener::class.java))
+        runCatching {
+            registerReceiver(power, android.content.IntentFilter().apply {
+                addAction(android.content.Intent.ACTION_POWER_CONNECTED); addAction(android.content.Intent.ACTION_POWER_DISCONNECTED)
+            }, android.content.Context.RECEIVER_EXPORTED)
+        }
         val apps = EmberApp.instance.apps
         val map = runCatching { currentRanking }.getOrNull()
         val list = runCatching { activeNotifications }.getOrNull().orEmpty()
@@ -33,6 +48,7 @@ class EmberNotificationListener : NotificationListenerService() {
         if (current === this) current = null
         pill?.stop(); pill = null
         NowPlaying.stop()
+        runCatching { unregisterReceiver(power) }
         NotificationStore.setConnected(false)
     }
 
@@ -45,7 +61,7 @@ class EmberNotificationListener : NotificationListenerService() {
         val alerting = !item.silent && !item.persistent && alerts(sbn, existing, rankingMap)
         NotificationStore.upsert(item, alerts = alerting)
         // Screen off (or the light already on): the lock-screen light, unless Do Not Disturb is holding this one back.
-        if (alerting && EmberApp.instance.prefs.lightEnabled.value && ranking?.matchesInterruptionFilter() != false &&
+        if (alerting && !focusSilences(item.packageName) && EmberApp.instance.prefs.lightEnabled.value && ranking?.matchesInterruptionFilter() != false &&
             (Light.showing || !getSystemService(PowerManager::class.java).isInteractive)) Light.show(this, item)
     }
 

@@ -40,6 +40,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
@@ -61,6 +62,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -108,9 +113,11 @@ fun drawerMatches(label: String, query: String): Boolean {
 fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit,
               title: String? = null, onClose: () -> Unit) {
     val prefs = EmberApp.instance.prefs
+    val context = androidx.compose.ui.platform.LocalContext.current
     val autoKeyboard by prefs.drawerKeyboard.collectAsStateWithLifecycle()
     val savedTab by prefs.drawerTab.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    var showHidden by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -136,9 +143,17 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
         TextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clip(RoundedCornerShape(28.dp)).focusRequester(focus),
             placeholder = { Text("Search apps") }, singleLine = true,
             leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            trailingIcon = { if (query.isNotEmpty()) IconButton({ query = "" }) { Icon(Icons.Rounded.Close, "Clear") } },
+            trailingIcon = {
+                if (query.isNotEmpty()) IconButton({ query = "" }) { Icon(Icons.Rounded.Close, "Clear") }
+                else if (title == null) IconButton({
+                    (context as? android.app.Activity)?.let { unlockHidden(it) { showHidden = true } }
+                }) { Icon(Icons.Rounded.Lock, "Hidden apps") }
+            },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { apps.firstOrNull { drawerMatches(it.label, query) }?.let(onLaunch) }),
+            keyboardActions = KeyboardActions(onGo = {
+                val first = apps.firstOrNull { drawerMatches(it.label, query) }
+                if (first != null) onLaunch(first) else if (query.isNotBlank()) webSearch(context, query)
+            }),
             colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent))
@@ -153,6 +168,7 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
             else GroupedApps(apps, layer, onLaunch, onAddToDock)
         }
     }
+    if (showHidden) HiddenAppsSheet(onLaunch = onLaunch, onClose = { showHidden = false })
 }
 
 @Composable
@@ -169,6 +185,8 @@ private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?,
     LaunchedEffect(query) { listState.scrollToItem(0) }
     Row(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.weight(1f).fillMaxHeight().then(if (layer != null) Modifier.nestedScroll(layer.closeConnection) else Modifier), state = listState) {
+            // Typing also gives sums, conversions, people and a web search.
+            if (query.isNotBlank()) item(key = "smart") { SmartResults(query) }
             grouped.forEach { (letter, list) ->
                 stickyHeader(key = "h-$letter") {
                     Text(letter, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 15.sp,
@@ -176,7 +194,7 @@ private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?,
                 }
                 items(list, key = { it.key }) { app -> DrawerRow(app, onLaunch, onAddToDock) }
             }
-            if (visible.isEmpty()) item { Text("No apps match \"$query\"", color = EmberColors.Secondary, modifier = Modifier.padding(24.dp)) }
+            if (visible.isEmpty()) item { Text("No apps match \"$query\"", color = EmberColors.Secondary, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) }
         }
         if (query.isEmpty()) LetterStrip(headingIndex.keys.toList()) { letter ->
             headingIndex[letter]?.let { scope.launch { listState.scrollToItem(it) } }
@@ -205,6 +223,14 @@ private fun AppMenu(app: AppEntry, open: Boolean, onDismiss: () -> Unit, onAddTo
     DropdownMenu(open, onDismiss) {
         DropdownMenuItem({ Text("Add to dock") }, { onDismiss(); onAddToDock(app) })
         if (onMove != null) DropdownMenuItem({ Text("Move to group…") }, { onDismiss(); onMove() })
+        val prefs = EmberApp.instance.prefs
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val inFocus = app.packageName in prefs.focusApps.collectAsStateWithLifecycle().value
+        DropdownMenuItem({ Text(if (inFocus) "Keep out during Focus: on" else "Put away during Focus") }, { onDismiss(); prefs.setFocusApp(app.packageName, !inFocus) })
+        DropdownMenuItem({ Text("Hide") }, {
+            onDismiss(); prefs.hideApp(app.packageName)
+            android.widget.Toast.makeText(context, "${app.label} hidden. See it under Hidden apps in the drawer.", android.widget.Toast.LENGTH_LONG).show()
+        })
         DropdownMenuItem({ Text("App info") }, { onDismiss(); repo.openAppInfo(app) })
         DropdownMenuItem({ Text("Uninstall") }, { onDismiss(); repo.uninstall(app) })
     }
@@ -335,25 +361,59 @@ private fun GridApp(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (A
     }
 }
 
-/** A–Z down the edge: tap or slide a finger along it to jump. */
+/**
+ * A–Z down the edge: tap or slide a finger along it to jump. While a finger is on it the letters near the finger swell
+ * and lean out like a wave, a large bubble shows the letter, and each new letter gives a light tick.
+ */
 @Composable
 private fun LetterStrip(letters: List<String>, onLetter: (String) -> Unit) {
     if (letters.size < 2) return
     var height by remember { mutableStateOf(1) }
     var last by remember { mutableStateOf("") }
+    var fingerY by remember { mutableFloatStateOf(-1f) }
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     fun pick(y: Float) {
+        fingerY = y
         val i = (y / height * letters.size).toInt().coerceIn(0, letters.lastIndex)
-        if (letters[i] != last) { last = letters[i]; onLetter(letters[i]) }
+        if (letters[i] != last) {
+            last = letters[i]; onLetter(letters[i])
+            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+        }
     }
-    Column(Modifier.width(28.dp).fillMaxHeight().padding(vertical = 8.dp).onSizeChanged { height = it.height.coerceAtLeast(1) }
-        .pointerInput(letters) {
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent()
-                    event.changes.firstOrNull()?.let { if (it.pressed) { pick(it.position.y); it.consume() } else last = "" }
+    Box(Modifier.width(30.dp).fillMaxHeight().padding(vertical = 8.dp)) {
+        Column(Modifier.fillMaxSize().onSizeChanged { height = it.height.coerceAtLeast(1) }
+            .pointerInput(letters) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        event.changes.firstOrNull()?.let { if (it.pressed) { pick(it.position.y); it.consume() } else { last = ""; fingerY = -1f } }
+                    }
+                }
+            }, horizontalAlignment = Alignment.CenterHorizontally) {
+            letters.forEachIndexed { i, letter ->
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(letter, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.graphicsLayer {
+                            val y = fingerY
+                            if (y < 0f) return@graphicsLayer
+                            // Distance from the finger in letters; the wave falls off smoothly over about two letters each way.
+                            val slot = height.toFloat() / letters.size
+                            val d = (y - (i + .5f) * slot) / slot
+                            val wave = kotlin.math.exp(-(d * d) / (2f * 1.8f * 1.8f))
+                            scaleX = 1f + 1.4f * wave; scaleY = scaleX
+                            translationX = -wave * 30.dp.toPx()
+                        })
                 }
             }
-        }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
-        letters.forEach { Text(it, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+        }
+        // The bubble: the current letter, large, beside the finger.
+        if (fingerY >= 0f && last.isNotEmpty()) {
+            val y = with(density) { fingerY.toDp() }
+            Box(Modifier.offset(x = (-96).dp, y = y - 32.dp).size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center) {
+                Text(last, color = MaterialTheme.colorScheme.onPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
