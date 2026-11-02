@@ -61,7 +61,7 @@ import kotlin.math.pow
  * Returns null for anything that isn't a sum, so ordinary app names never turn into results.
  */
 fun evaluateExpression(input: String): Double? {
-    var text = input.trim().lowercase(Locale.ROOT).replace('×', '*').replace('÷', '/').replace(',', '')
+    var text = input.trim().lowercase(Locale.ROOT).replace('×', '*').replace('÷', '/').replace(",", "")
     if (text.isEmpty() || text.none { it.isDigit() }) return null
     Regex("^([\\d.]+)\\s*%\\s*of\\s*([\\d.]+)$").matchEntire(text)?.let { m ->
         return m.groupValues[1].toDoubleOrNull()?.let { a -> m.groupValues[2].toDoubleOrNull()?.let { b -> a / 100 * b } }
@@ -69,9 +69,10 @@ fun evaluateExpression(input: String): Double? {
     text = text.replace(Regex("(?<=\\d)\\s*x\\s*(?=[\\d(])"), "*")
     if (!text.all { it.isDigit() || it in "+-*/^().% " }) return null
     if (text.none { it in "+-*/^%" }) return null
+    val src = text
     val parser = object {
         var pos = 0
-        fun peek() = text.getOrNull(pos)?.also { if (it == ' ') { pos++; return peek() } }
+        fun peek(): Char? { while (pos < src.length && src[pos] == ' ') pos++; return src.getOrNull(pos) }
         fun eat(c: Char): Boolean { if (peek() == c) { pos++; return true }; return false }
         fun expr(): Double {
             var v = term()
@@ -97,7 +98,7 @@ fun evaluateExpression(input: String): Double? {
             if (eat('(')) { val v = expr(); if (!eat(')')) throw IllegalArgumentException(); return v }
             val start = pos
             while (peek()?.let { it.isDigit() || it == '.' } == true) pos++
-            val v = text.substring(start, pos).trim().toDouble()
+            val v = src.substring(start, pos).trim().toDouble()
             if (eat('%')) lastPercent = true
             return v
         }
