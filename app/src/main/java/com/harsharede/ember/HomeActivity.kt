@@ -63,7 +63,7 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
-    override fun onResume() { super.onResume(); resumed = true }
+    override fun onResume() { super.onResume(); resumed = true; Wallpapers.onHomeVisible(this) }
     override fun onPause() { super.onPause(); resumed = false }
 
     companion object {

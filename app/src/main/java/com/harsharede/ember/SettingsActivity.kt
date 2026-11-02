@@ -58,6 +58,20 @@ class SettingsActivity : ComponentActivity() {
 
     private val homeRole = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { refresh++ }
 
+    private val photoAccess = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        refresh++
+        if (Wallpapers.hasPhotoAccess(this)) startRotating()
+        else Toast.makeText(this, "Ember needs your photos to make wallpapers from them", Toast.LENGTH_LONG).show()
+    }
+
+    private fun startRotating() {
+        val prefs = EmberApp.instance.prefs
+        prefs.setWallpaperRotate(true)
+        Wallpapers.schedule(this)
+        Wallpapers.changeNow(this)
+        Toast.makeText(this, "Picking a photo for your wallpaper…", Toast.LENGTH_SHORT).show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -98,6 +112,11 @@ class SettingsActivity : ComponentActivity() {
         val lightMinutes by prefs.lightMinutes.collectAsStateWithLifecycle()
         val lightIcon by prefs.lightIcon.collectAsStateWithLifecycle()
         val lightBrightness by prefs.lightBrightness.collectAsStateWithLifecycle()
+        val rotate by prefs.wallpaperRotate.collectAsStateWithLifecycle()
+        val every by prefs.wallpaperEvery.collectAsStateWithLifecycle()
+        val wpLock by prefs.wallpaperLock.collectAsStateWithLifecycle()
+        val cameraOnly by prefs.wallpaperCameraOnly.collectAsStateWithLifecycle()
+        val wpCard by prefs.wallpaperCard.collectAsStateWithLifecycle()
         val isHome = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
         val hasAccess = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
         val canOverlay = Settings.canDrawOverlays(this)
@@ -137,6 +156,31 @@ class SettingsActivity : ComponentActivity() {
                         Choice("Brightness", listOf(0 to "Low", 1 to "Medium", 2 to "High"), lightBrightness) { prefs.setLightBrightness(it) }
                         Toggle("Show app icons in the light", "Off: just a coloured light, nothing to read from across the room", lightIcon) { prefs.setLightIcon(it) }
                         if (!canOverlay) Text("Needs \"Display over other apps\" (above) to wake the screen.", color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
+                    }
+                }
+
+                Group("Wallpaper") {
+                    Toggle("Wallpaper from your photos", "Ember picks sharp photos and favours portrait shots with a blurred " +
+                        "background, cropped around the subject. Nothing leaves your phone.", rotate) { on ->
+                        if (!on) { prefs.setWallpaperRotate(false); Wallpapers.schedule(this@SettingsActivity) }
+                        else if (Wallpapers.hasPhotoAccess(this@SettingsActivity)) startRotating()
+                        else photoAccess.launch(Wallpapers.photoPermissions())
+                    }
+                    if (rotate) {
+                        Choice("Change it", listOf(Wallpapers.EVERY_30_MIN to "Every 30 min", Wallpapers.THREE_A_DAY to "3 times a day"), every) {
+                            prefs.setWallpaperEvery(it); Wallpapers.schedule(this@SettingsActivity)
+                        }
+                        Toggle("Lock screen too", null, wpLock) { prefs.setWallpaperLock(it) }
+                        Toggle("Camera photos only", "Leave out screenshots, downloads and chat images", cameraOnly) { prefs.setWallpaperCameraOnly(it) }
+                        Toggle("Like / dislike buttons on Home", "Dislike swaps the photo at once and it never comes back", wpCard) { prefs.setWallpaperCard(it) }
+                        Row_("New photo now") { Wallpapers.changeNow(this@SettingsActivity) }
+                        Row_("Forget likes and dislikes") {
+                            prefs.forgetPhotoChoices()
+                            Toast.makeText(this@SettingsActivity, "Done", Toast.LENGTH_SHORT).show()
+                        }
+                        Text("Timed changes wait until the screen is off or you're on Home: a new wallpaper changes the colours, " +
+                            "and Android restarts open apps' screens for that.", color = EmberColors.Secondary,
                             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     }
                 }

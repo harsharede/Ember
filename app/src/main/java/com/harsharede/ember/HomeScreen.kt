@@ -31,7 +31,15 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.ThumbDown
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -85,6 +93,9 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val launches by app.prefs.launches.collectAsStateWithLifecycle()
     val hidden by app.prefs.hiddenStatus.collectAsStateWithLifecycle()
     val widgets by app.prefs.widgets.collectAsStateWithLifecycle()
+    val rotating by app.prefs.wallpaperRotate.collectAsStateWithLifecycle()
+    val showWallpaperButtons by app.prefs.wallpaperCard.collectAsStateWithLifecycle()
+    val wallpaperCard = rotating && showWallpaperButtons
     val notifications by NotificationStore.items.collectAsStateWithLifecycle()
     val connected by NotificationStore.connected.collectAsStateWithLifecycle()
     val status by rememberDeviceStatus()
@@ -161,7 +172,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
                         item("date") { DateHeader(now) }
                         item("suggestions") { SuggestionsCard(suggestions, apps.isEmpty(), launch) }
-                        item("clock") { ClockCard(now) }
+                        if (wallpaperCard) item("wallpaper") { WallpaperCard() }
                         if (!connected) item("access") { AccessCard() }
                         items(widgets, key = { "w${it.id}" }) { widget -> HomeWidgetView(widget, editing, columnWidth) }
                         if (editing) item("edit-actions") {
@@ -253,13 +264,36 @@ private fun SuggestionsCard(apps: List<AppEntry>, loading: Boolean, onLaunch: (A
     }
 }
 
-/** The time, large. The day and date are already in the header, so the card doesn't repeat them. */
+/**
+ * Today's wallpaper photo: when it was taken, and three buttons. Dislike swaps it at once and it never comes back,
+ * the arrows put a new one on, the heart makes it come back more often.
+ */
 @Composable
-private fun ClockCard(now: Long) {
-    Column(Modifier.width(150.dp).glass().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("LOCAL TIME", color = EmberColors.Secondary, style = MaterialTheme.typography.labelMedium)
-        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 36.sp, fontWeight = FontWeight.Bold)
+private fun WallpaperCard() {
+    val context = LocalContext.current
+    val current by Wallpapers.current.collectAsStateWithLifecycle()
+    val changing by Wallpapers.changing.collectAsStateWithLifecycle()
+    Row(Modifier.fillMaxWidth().glass().padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("WALLPAPER", color = EmberColors.Secondary, style = MaterialTheme.typography.labelMedium)
+            val taken = current?.takenAt?.takeIf { it > 0 }
+            Text(when {
+                changing -> "Finding a photo…"
+                taken != null -> SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(taken))
+                else -> "From your photos"
+            }, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+        }
+        IconButton({ Wallpapers.dislike(context) }, enabled = !changing) {
+            Icon(Icons.Rounded.ThumbDown, "Don't show this photo again", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        IconButton({ Wallpapers.changeNow(context) }, enabled = !changing) {
+            if (changing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            else Icon(Icons.Rounded.Refresh, "New photo", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        IconButton({ Wallpapers.like() }, enabled = current != null && !changing) {
+            Icon(if (current?.liked == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                if (current?.liked == true) "Liked" else "Like", tint = if (current?.liked == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

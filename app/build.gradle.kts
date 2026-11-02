@@ -12,8 +12,8 @@ android {
         applicationId = "com.harsharede.ember"
         minSdk = 31
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.3.1"
+        versionCode = 5
+        versionName = "0.4.0"
     }
 
     signingConfigs {
@@ -63,6 +63,8 @@ dependencies {
     // Installs the Compose libraries' own startup profiles on sideloaded installs, so scrolling and animations are
     // compiled ahead of time instead of running interpreted for the first days.
     implementation(libs.androidx.profileinstaller)
+    // The wallpaper timer: survives restarts and lets Android pick a battery-friendly moment.
+    implementation(libs.androidx.work.runtime)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

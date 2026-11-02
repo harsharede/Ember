@@ -1,0 +1,278 @@
+package com.harsharede.ember
+
+import android.Manifest
+import android.app.WallpaperManager
+import android.content.ContentUris
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.hardware.display.DisplayManager
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.MediaStore
+import android.view.Display
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
+import kotlin.random.Random
+
+/**
+ * Wallpapers from the user's own photos. Ember scores camera photos (sharp ones first, portrait-mode shots with a
+ * blurred background next), keeps what it learns in a small file, and picks a good one at random, more often the ones
+ * the user liked and never the ones they disliked. Each photo is cropped to the screen around its sharp subject.
+ *
+ * Automatic changes wait until the screen is off or Home is in front: a new wallpaper changes the Material You colours,
+ * and Android restarts open apps' screens for that, which nobody wants in the middle of something.
+ */
+object Wallpapers {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val lock = Mutex()
+
+    data class Current(val id: Long, val takenAt: Long, val liked: Boolean)
+
+    private val _current = MutableStateFlow<Current?>(null)
+    /** The photo on the wallpaper now, if Ember put it there. */
+    val current: StateFlow<Current?> = _current.asStateFlow()
+    private val _changing = MutableStateFlow(false)
+    val changing: StateFlow<Boolean> = _changing.asStateFlow()
+
+    private const val WORK = "ember-wallpaper"
+    private const val SCORES_FILE = "photo_scores.tsv"
+    private const val ANALYSIS_SIZE = 256
+    private const val NEW_PER_RUN = 24
+
+    fun init(context: Context) {
+        val prefs = EmberApp.instance.prefs
+        val id = prefs.wallpaperPhoto.value
+        if (id > 0) _current.value = Current(id, prefs.wallpaperTakenAt.value, id in prefs.likedPhotos.value)
+        schedule(context, restart = false)
+    }
+
+    fun hasPhotoAccess(context: Context): Boolean {
+        fun granted(p: String) = context.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
+        return if (Build.VERSION.SDK_INT >= 33) granted(Manifest.permission.READ_MEDIA_IMAGES) ||
+            (Build.VERSION.SDK_INT >= 34 && granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED))
+        else granted(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
+    fun photoPermissions(): Array<String> = when {
+        Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+
+    /** (Re)start the timer after a settings change: every 30 minutes, or morning, afternoon and evening. */
+    fun schedule(context: Context, restart: Boolean = true) {
+        val prefs = EmberApp.instance.prefs
+        val work = WorkManager.getInstance(context)
+        if (!prefs.wallpaperRotate.value) { work.cancelUniqueWork(WORK); return }
+        val request = if (prefs.wallpaperEvery.value == EVERY_30_MIN)
+            PeriodicWorkRequestBuilder<WallpaperWorker>(30, TimeUnit.MINUTES).setInitialDelay(30, TimeUnit.MINUTES)
+        else PeriodicWorkRequestBuilder<WallpaperWorker>(8, TimeUnit.HOURS)
+            .setInitialDelay(delayToNextSlot(System.currentTimeMillis()), TimeUnit.MILLISECONDS)
+        // On app start keep the running timer (UPDATE); after a settings change start it afresh.
+        work.enqueueUniquePeriodicWork(WORK, if (restart) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.UPDATE,
+            request.setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build()).build())
+    }
+
+    /** From the timer: change now if nobody's looking at another app, otherwise as soon as they aren't. */
+    fun timerFired(context: Context) {
+        val power = context.getSystemService(PowerManager::class.java)
+        if (!power.isInteractive || HomeActivity.resumed) changeNow(context)
+        else EmberApp.instance.prefs.setWallpaperPending(true)
+    }
+
+    fun onScreenOff(context: Context) { if (EmberApp.instance.prefs.wallpaperPending.value) changeNow(context) }
+    fun onHomeVisible(context: Context) { if (EmberApp.instance.prefs.wallpaperPending.value) changeNow(context) }
+
+    fun like() {
+        val now = _current.value ?: return
+        val prefs = EmberApp.instance.prefs
+        if (now.liked) prefs.unlikePhoto(now.id) else prefs.likePhoto(now.id)
+        _current.value = now.copy(liked = !now.liked)
+    }
+
+    /** Never this one again, and a new one right away. */
+    fun dislike(context: Context) {
+        _current.value?.let { EmberApp.instance.prefs.dislikePhoto(it.id) }
+        changeNow(context)
+    }
+
+    fun changeNow(context: Context) {
+        val app = context.applicationContext
+        scope.launch {
+            if (!lock.tryLock()) return@launch
+            _changing.value = true
+            try { runCatching { change(app) } } finally { _changing.value = false; lock.unlock() }
+        }
+    }
+
+    private suspend fun change(context: Context) = withContext(Dispatchers.IO) {
+        val prefs = EmberApp.instance.prefs
+        prefs.setWallpaperPending(false)
+        if (!hasPhotoAccess(context)) return@withContext
+        val photos = listPhotos(context, prefs.wallpaperCameraOnly.value)
+        if (photos.isEmpty()) return@withContext
+        val scores = loadScores(context)
+        val disliked = prefs.dislikedPhotos.value
+        val liked = prefs.likedPhotos.value
+
+        // Learn a few more photos each time; the file remembers them, so the choice gets better as it goes.
+        val unknown = photos.filter { it.id !in scores && it.id !in disliked }.shuffled().take(NEW_PER_RUN)
+        for (photo in unknown) analyze(context, photo)?.let { scores[photo.id] = it }
+        saveScores(context, scores, photos.mapTo(HashSet()) { it.id })
+
+        val recent = prefs.recentPhotos.value
+        val known = photos.filter { it.id in scores && it.id !in disliked }
+        // Leave out the last ones shown, as long as enough are left to choose from.
+        val fresh = known.filter { it.id !in recent }.ifEmpty { known }
+        // Only the better half competes; within it, the higher the score the likelier.
+        val cutoff = fresh.map { scores.getValue(it.id).total }.sorted().let { it.getOrElse(it.size / 2) { 0f } }
+        val pool = fresh.filter { scores.getValue(it.id).total >= cutoff || it.id in liked }
+        val pick = pickWeighted(pool, { p ->
+            val s = scores.getValue(p.id)
+            val portrait = if (p.portrait) 1.25 else 1.0
+            Math.pow(s.total.toDouble(), 3.0) * portrait * (if (p.id in liked) 3.0 else 1.0)
+        }, Random.nextDouble()) ?: return@withContext
+
+        val bitmap = render(context, pick, scores.getValue(pick.id)) ?: return@withContext
+        val which = if (prefs.wallpaperLock.value) WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK else WallpaperManager.FLAG_SYSTEM
+        WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, which)
+        bitmap.recycle()
+        prefs.setWallpaperPhoto(pick.id, pick.takenAt)
+        prefs.addRecentPhoto(pick.id, keep = (known.size / 3).coerceIn(1, 60))
+        _current.value = Current(pick.id, pick.takenAt, pick.id in liked)
+    }
+
+    private data class Photo(val id: Long, val width: Int, val height: Int, val takenAt: Long) {
+        val uri: Uri get() = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+        val portrait: Boolean get() = height > width
+    }
+
+    /** Camera photos big enough for the screen. Screenshots and saved images are left out unless asked for. */
+    private fun listPhotos(context: Context, cameraOnly: Boolean): List<Photo> {
+        val out = ArrayList<Photo>()
+        val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.WIDTH, MediaStore.Images.Media.HEIGHT,
+            MediaStore.Images.Media.ORIENTATION, MediaStore.Images.Media.DATE_TAKEN, MediaStore.Images.Media.RELATIVE_PATH,
+            MediaStore.Images.Media.MIME_TYPE)
+        context.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, null)?.use { c ->
+            val iId = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+            val iW = c.getColumnIndexOrThrow(MediaStore.Images.Media.WIDTH)
+            val iH = c.getColumnIndexOrThrow(MediaStore.Images.Media.HEIGHT)
+            val iO = c.getColumnIndexOrThrow(MediaStore.Images.Media.ORIENTATION)
+            val iT = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
+            val iP = c.getColumnIndexOrThrow(MediaStore.Images.Media.RELATIVE_PATH)
+            val iM = c.getColumnIndexOrThrow(MediaStore.Images.Media.MIME_TYPE)
+            while (c.moveToNext()) {
+                val path = c.getString(iP).orEmpty().lowercase()
+                val mime = c.getString(iM).orEmpty()
+                if (mime == "image/gif" || "screenshot" in path) continue
+                if (cameraOnly && !(path.startsWith("dcim/") && !path.contains("screen"))) continue
+                var w = c.getInt(iW); var h = c.getInt(iH)
+                if (c.getInt(iO) % 180 == 90) { val t = w; w = h; h = t }
+                if (minOf(w, h) < 1000) continue
+                out += Photo(c.getLong(iId), w, h, c.getLong(iT))
+            }
+        }
+        return out
+    }
+
+    private fun analyze(context: Context, photo: Photo): PhotoScore? = runCatching {
+        val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, photo.uri)) { decoder, info, _ ->
+            val scale = ANALYSIS_SIZE.toFloat() / maxOf(info.size.width, info.size.height)
+            decoder.setTargetSize((info.size.width * scale).toInt().coerceAtLeast(3), (info.size.height * scale).toInt().coerceAtLeast(3))
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+        val w = bitmap.width; val h = bitmap.height
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        bitmap.recycle()
+        val luma = IntArray(w * h) { i -> val p = pixels[i]; (((p shr 16) and 0xFF) * 299 + ((p shr 8) and 0xFF) * 587 + (p and 0xFF) * 114) / 1000 }
+        analyzePhoto(luma, w, h)
+    }.getOrNull()
+
+    /** Decoded just large enough for the screen, then cropped to its shape around the subject. */
+    private fun render(context: Context, photo: Photo, score: PhotoScore): Bitmap? = runCatching {
+        val (screenW, screenH) = screenSize(context)
+        val decoded = ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, photo.uri)) { decoder, info, _ ->
+            val w = info.size.width; val h = info.size.height
+            val scale = (if (w.toDouble() / h > screenW.toDouble() / screenH) screenH.toDouble() / h else screenW.toDouble() / w).coerceAtMost(1.0)
+            decoder.setTargetSize((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1))
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+        val (l, t, cw, ch) = wallpaperCrop(decoded.width, decoded.height, screenW, screenH, score.focusX, score.focusY).toList()
+        val cropped = Bitmap.createBitmap(decoded, l, t, cw, ch)
+        if (cropped !== decoded) decoded.recycle()
+        if (cropped.width == screenW && cropped.height == screenH) cropped
+        else Bitmap.createScaledBitmap(cropped, screenW, screenH, true).also { if (it !== cropped) cropped.recycle() }
+    }.getOrNull()
+
+    private fun screenSize(context: Context): Pair<Int, Int> {
+        val display = context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+        val size = android.graphics.Point()
+        @Suppress("DEPRECATION") display.getRealSize(size)
+        return minOf(size.x, size.y) to maxOf(size.x, size.y)
+    }
+
+    private fun loadScores(context: Context): HashMap<Long, PhotoScore> {
+        val map = HashMap<Long, PhotoScore>()
+        val file = File(context.filesDir, SCORES_FILE)
+        if (!file.exists()) return map
+        file.forEachLine { line ->
+            val p = line.split('\t')
+            if (p.size == 6) runCatching {
+                map[p[0].toLong()] = PhotoScore(p[1].toFloat(), p[2].toFloat(), p[3].toFloat(), p[4].toFloat(), p[5].toFloat())
+            }
+        }
+        return map
+    }
+
+    /** Only photos that still exist are kept, so deleted ones don't pile up in the file. */
+    private fun saveScores(context: Context, scores: Map<Long, PhotoScore>, existing: Set<Long>) {
+        val text = scores.entries.filter { it.key in existing }.joinToString("\n") { (id, s) ->
+            "$id\t${s.sharpness}\t${s.bokeh}\t${s.exposure}\t${s.focusX}\t${s.focusY}"
+        }
+        File(context.filesDir, SCORES_FILE).writeText(text)
+    }
+
+    const val EVERY_30_MIN = 0
+    const val THREE_A_DAY = 1
+
+    /** Morning, afternoon and evening: 08:00, 14:00 and 20:00. */
+    fun delayToNextSlot(now: Long): Long {
+        val slots = listOf(8, 14, 20)
+        for (day in 0..1) for (hour in slots) {
+            val t = Calendar.getInstance().apply {
+                timeInMillis = now; add(Calendar.DAY_OF_YEAR, day)
+                set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            if (t > now) return t - now
+        }
+        return 8 * 60 * 60_000L
+    }
+}
+
+class WallpaperWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        Wallpapers.timerFired(applicationContext)
+        return Result.success()
+    }
+}

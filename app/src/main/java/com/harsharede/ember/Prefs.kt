@@ -66,6 +66,59 @@ class Prefs(context: Context) {
     /** 0 low, 1 medium, 2 high. */
     val lightBrightness: StateFlow<Int> = _lightBrightness.asStateFlow()
 
+    // Wallpapers from the user's photos.
+    private val _wallpaperRotate = MutableStateFlow(sp.getBoolean(KEY_WP_ROTATE, false))
+    val wallpaperRotate: StateFlow<Boolean> = _wallpaperRotate.asStateFlow()
+    private val _wallpaperEvery = MutableStateFlow(sp.getInt(KEY_WP_EVERY, 1))
+    /** [Wallpapers.EVERY_30_MIN] or [Wallpapers.THREE_A_DAY]. */
+    val wallpaperEvery: StateFlow<Int> = _wallpaperEvery.asStateFlow()
+    private val _wallpaperLock = MutableStateFlow(sp.getBoolean(KEY_WP_LOCK, true))
+    /** Put it on the lock screen too, not just Home. */
+    val wallpaperLock: StateFlow<Boolean> = _wallpaperLock.asStateFlow()
+    private val _wallpaperCameraOnly = MutableStateFlow(sp.getBoolean(KEY_WP_CAMERA, true))
+    /** Only photos taken with the camera (no screenshots, downloads or chat images). */
+    val wallpaperCameraOnly: StateFlow<Boolean> = _wallpaperCameraOnly.asStateFlow()
+    private val _wallpaperCard = MutableStateFlow(sp.getBoolean(KEY_WP_CARD, true))
+    /** The like / dislike / new-photo buttons on Home. */
+    val wallpaperCard: StateFlow<Boolean> = _wallpaperCard.asStateFlow()
+    private val _wallpaperPending = MutableStateFlow(sp.getBoolean(KEY_WP_PENDING, false))
+    /** A timed change is waiting for the screen to go off or Home to come back. */
+    val wallpaperPending: StateFlow<Boolean> = _wallpaperPending.asStateFlow()
+    private val _wallpaperPhoto = MutableStateFlow(sp.getLong(KEY_WP_PHOTO, -1L))
+    val wallpaperPhoto: StateFlow<Long> = _wallpaperPhoto.asStateFlow()
+    private val _wallpaperTakenAt = MutableStateFlow(sp.getLong(KEY_WP_TAKEN, 0L))
+    val wallpaperTakenAt: StateFlow<Long> = _wallpaperTakenAt.asStateFlow()
+    private val _liked = MutableStateFlow(readIds(KEY_WP_LIKED))
+    val likedPhotos: StateFlow<Set<Long>> = _liked.asStateFlow()
+    private val _disliked = MutableStateFlow(readIds(KEY_WP_DISLIKED))
+    val dislikedPhotos: StateFlow<Set<Long>> = _disliked.asStateFlow()
+    private val _recent = MutableStateFlow(sp.getString(KEY_WP_RECENT, null).orEmpty().split(',').mapNotNull { it.toLongOrNull() })
+    /** The last photos shown, newest first, so they don't come straight back. */
+    val recentPhotos: StateFlow<List<Long>> = _recent.asStateFlow()
+
+    fun setWallpaperRotate(on: Boolean) { _wallpaperRotate.value = on; sp.edit().putBoolean(KEY_WP_ROTATE, on).apply() }
+    fun setWallpaperEvery(v: Int) { _wallpaperEvery.value = v; sp.edit().putInt(KEY_WP_EVERY, v).apply() }
+    fun setWallpaperLock(on: Boolean) { _wallpaperLock.value = on; sp.edit().putBoolean(KEY_WP_LOCK, on).apply() }
+    fun setWallpaperCameraOnly(on: Boolean) { _wallpaperCameraOnly.value = on; sp.edit().putBoolean(KEY_WP_CAMERA, on).apply() }
+    fun setWallpaperCard(on: Boolean) { _wallpaperCard.value = on; sp.edit().putBoolean(KEY_WP_CARD, on).apply() }
+    fun setWallpaperPending(on: Boolean) { if (_wallpaperPending.value != on) { _wallpaperPending.value = on; sp.edit().putBoolean(KEY_WP_PENDING, on).apply() } }
+    fun setWallpaperPhoto(id: Long, takenAt: Long) {
+        _wallpaperPhoto.value = id; _wallpaperTakenAt.value = takenAt
+        sp.edit().putLong(KEY_WP_PHOTO, id).putLong(KEY_WP_TAKEN, takenAt).apply()
+    }
+    fun addRecentPhoto(id: Long, keep: Int) {
+        val list = (listOf(id) + _recent.value.filter { it != id }).take(keep)
+        _recent.value = list; sp.edit().putString(KEY_WP_RECENT, list.joinToString(",")).apply()
+    }
+    fun likePhoto(id: Long) { saveIds(KEY_WP_LIKED, _liked, _liked.value + id); saveIds(KEY_WP_DISLIKED, _disliked, _disliked.value - id) }
+    fun unlikePhoto(id: Long) = saveIds(KEY_WP_LIKED, _liked, _liked.value - id)
+    fun dislikePhoto(id: Long) { saveIds(KEY_WP_DISLIKED, _disliked, _disliked.value + id); saveIds(KEY_WP_LIKED, _liked, _liked.value - id) }
+    fun forgetPhotoChoices() { saveIds(KEY_WP_LIKED, _liked, emptySet()); saveIds(KEY_WP_DISLIKED, _disliked, emptySet()) }
+    private fun readIds(key: String): Set<Long> = sp.getStringSet(key, emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
+    private fun saveIds(key: String, flow: MutableStateFlow<Set<Long>>, ids: Set<Long>) {
+        flow.value = ids; sp.edit().putStringSet(key, ids.mapTo(HashSet()) { it.toString() }).apply()
+    }
+
     fun setLight(on: Boolean) { _light.value = on; sp.edit().putBoolean(KEY_LIGHT, on).apply() }
     fun setLightMinutes(m: Int) { _lightMinutes.value = m; sp.edit().putInt(KEY_LIGHT_MINUTES, m).apply() }
     fun setLightIcon(on: Boolean) { _lightIcon.value = on; sp.edit().putBoolean(KEY_LIGHT_ICON, on).apply() }
@@ -150,6 +203,17 @@ class Prefs(context: Context) {
         private const val KEY_PERSISTENT = "show_persistent"
         private const val KEY_WIDGETS = "widgets"
         private const val KEY_LIGHT = "light"
+        private const val KEY_WP_ROTATE = "wp_rotate"
+        private const val KEY_WP_EVERY = "wp_every"
+        private const val KEY_WP_LOCK = "wp_lock"
+        private const val KEY_WP_CAMERA = "wp_camera_only"
+        private const val KEY_WP_CARD = "wp_card"
+        private const val KEY_WP_PENDING = "wp_pending"
+        private const val KEY_WP_PHOTO = "wp_photo"
+        private const val KEY_WP_TAKEN = "wp_taken"
+        private const val KEY_WP_LIKED = "wp_liked"
+        private const val KEY_WP_DISLIKED = "wp_disliked"
+        private const val KEY_WP_RECENT = "wp_recent"
         private const val KEY_LIGHT_MINUTES = "light_minutes"
         private const val KEY_LIGHT_ICON = "light_icon"
         private const val KEY_LIGHT_BRIGHTNESS = "light_brightness"

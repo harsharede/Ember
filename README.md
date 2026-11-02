@@ -3,8 +3,12 @@
 A calm Android launcher. One Home screen, a status rail instead of a status bar, and a notification light instead of
 banners.
 
-- **Home** is a Today page: the day and date, Suggestions (the apps you open most, recent use counting most) and a clock.
-- **The rail** on the right shows the time, date and an icon for each thing that's on: Wi-Fi, mobile signal, VPN,
+- **Home** is a Today page: the day and date, Suggestions (the apps you open most, recent use counting most) and your widgets.
+- **Wallpapers from your photos** (Settings › Wallpaper): every 30 minutes or three times a day, Ember picks one of your
+  camera photos, preferring sharp ones and portrait-mode shots with a blurred background, and crops it around the
+  subject. 👎 swaps it at once and it never returns, ↻ puts a new one on, ♥ makes it come back more often. Timed changes
+  wait for the screen to go off or for Home, since a new wallpaper changes the colours and restarts open apps' screens.
+- **The rail** on the right shows the time and an icon for each thing that's on: Wi-Fi, mobile signal, VPN,
   Bluetooth, airplane mode, Do Not Disturb, silent/vibrate, location, power saving and battery. Swipe any icon sideways
   to hide it; Settings brings it back. The orange notification count opens to show which apps have notifications.
   Below it, a four-app dock (hold a place to change its app).
@@ -46,6 +50,8 @@ Ember has no internet permission. Notifications, app usage and settings never le
 | Query all packages | Listing your apps (every launcher needs this) |
 | Network state | The Wi-Fi, mobile and VPN icons |
 | Request delete packages | Uninstall from the drawer; Android always asks first |
+| Photos (read only) | Choosing wallpapers from your camera photos; they're analysed on the phone and never leave it |
+| Set wallpaper | Putting the chosen photo on Home and the lock screen |
 | Wake lock, turn screen on | The lock-screen light: waking the screen, keeping it on while it glows, the pocket sensor |
 
 ## Building

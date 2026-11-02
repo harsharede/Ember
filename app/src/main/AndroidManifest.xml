@@ -11,6 +11,11 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- The lock-screen light: keep the screen on while it glows, and let the proximity sensor switch it off in a pocket. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Wallpapers from your photos: read them (on the phone only) and set the wallpaper. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <!-- Android 14+: lets the light wake the screen when a notification arrives. -->
     <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
 

@@ -14,6 +14,11 @@ class EmberApp : Application() {
         prefs = Prefs(this)
         apps = AppsRepository(this)
         Widgets.init(this)
+        Wallpapers.init(this)
+        // A timed wallpaper change waits for the screen to go off, so it never lands in the middle of another app.
+        registerReceiver(object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: android.content.Intent) = Wallpapers.onScreenOff(context)
+        }, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF), android.content.Context.RECEIVER_EXPORTED)
     }
 
     companion object {
