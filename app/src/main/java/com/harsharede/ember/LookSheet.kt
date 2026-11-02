@@ -35,6 +35,8 @@ fun LookSheet(onClose: () -> Unit) {
     val railAlpha by prefs.railAlpha.collectAsStateWithLifecycle()
     val cardAlpha by prefs.cardAlpha.collectAsStateWithLifecycle()
     val wallpaperPage by prefs.wallpaperPage.collectAsStateWithLifecycle()
+    val animIcons by prefs.animIcons.collectAsStateWithLifecycle()
+    val animCards by prefs.animCards.collectAsStateWithLifecycle()
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         scrimColor = Color.Transparent, containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .96f)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp).navigationBarsPadding()) {
@@ -63,6 +65,10 @@ fun LookSheet(onClose: () -> Unit) {
                 }
                 Switch(wallpaperPage, { prefs.setWallpaperPage(it) })
             }
+            Text("Coming back to Home", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 18.dp))
+            SwitchRow("Dock icons fall into place", "One after another, with a little bounce", animIcons) { prefs.setAnimIcons(it) }
+            SwitchRow("Home cards fall into place", "The date, Smart Stack and widgets drop in", animCards) { prefs.setAnimCards(it) }
         }
     }
 }
@@ -75,5 +81,16 @@ private fun Setting(title: String, value: String, slider: @Composable () -> Unit
             Text(value, style = MaterialTheme.typography.bodyMedium, color = EmberColors.Secondary)
         }
         slider()
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, detail: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = EmberColors.Secondary)
+        }
+        Switch(on, onChange)
     }
 }

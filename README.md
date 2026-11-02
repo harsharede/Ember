@@ -20,7 +20,8 @@ banners.
   Below it, the dock: as many apps as you like, filling the room left (it scrolls, with an arrow, when the capsule above
   grows). Hold an app to change, move or remove it. - **Wallpaper button**: tiny, in the bottom-left corner. Tap it for where and when the photo was taken (scrolling past;
   tap to open the photo), ♥, new photo and 👎.
-- **Customize look** (hold Home): rail width, dock height, rail and card transparency, live.
+- **Customize look** (hold Home): rail width, dock height, rail and card transparency, live; and two switches for the
+  welcome-back animation, where dock icons bounce into line and Home's cards drop into place when you return to Home.
 - **Pages**: hold Home › Add page for blank pages to fill with widgets; swipe sideways between them. The last page shows
   nothing but the wallpaper: the rail, cards, buttons and navigation bar fade away (switch it off in Customize look).
 - **Swipe up** for the app drawer: every app A to Z (the keyboard opens so you can type straight away) or, one swipe

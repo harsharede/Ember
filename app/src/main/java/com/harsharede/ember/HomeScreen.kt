@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
@@ -117,6 +118,13 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val railAlpha by app.prefs.railAlpha.collectAsStateWithLifecycle()
     val cardAlpha by app.prefs.cardAlpha.collectAsStateWithLifecycle()
     val wallpaperPage by app.prefs.wallpaperPage.collectAsStateWithLifecycle()
+    val animIcons by app.prefs.animIcons.collectAsStateWithLifecycle()
+    val animCards by app.prefs.animCards.collectAsStateWithLifecycle()
+    // Android's "Remove animations" wins over Ember's own switches.
+    val systemAnimations = remember { android.provider.Settings.Global.getFloat(context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
+    val iconsFall = animIcons && systemAnimations
+    val cardsFall = animCards && systemAnimations
+    val entrance = remember { Entrance() }
     // The pages: Today, any widget pages, and last (if on) a page with nothing but the wallpaper.
     val homePager = rememberPagerState { pageCount + if (wallpaperPage) 1 else 0 }
     val totalPages = pageCount + if (wallpaperPage) 1 else 0
@@ -144,6 +152,11 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
         while (true) { now = System.currentTimeMillis(); delay(60_000 - now % 60_000 + 50) }
     }
     val scope = rememberCoroutineScope()
+    // Out of sight (an app opened, the screen went off): park the icons and cards. Back in sight: they fall into place.
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+        if (iconsFall || cardsFall) scope.launch { entrance.park() }
+    }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_START) { scope.launch { entrance.play() } }
     val drawer = remember { Layer(scope, sign = -1f) }
     val notes = remember { Layer(scope, sign = 1f) }
     val pull = remember { HomePull(drawer, notes) }
@@ -227,12 +240,12 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                         val pageWidgets = widgets.filter { it.page == page || (page == pageCount - 1 && it.page >= pageCount) }
                         LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 90.dp)) {
                             if (page == 0) {
-                                item("date") { DateHeader(now) }
-                                item("stack") {
+                                item("date") { Box(Modifier.fallIn(entrance, 0, cardsFall, Entrance.Kind.CARD)) { DateHeader(now) } }
+                                item("stack") { Box(Modifier.fallIn(entrance, 1, cardsFall, Entrance.Kind.CARD)) {
                                     SmartStackCard(columnWidth, active = !drawerShown && !notesShown && !stackEditor && homePager.currentPage == 0, editing = editing,
                                         suggestions = { SuggestionsCard(suggestions, apps.isEmpty(), launch) },
                                         onEdit = { stackEditor = true })
-                                }
+                                } }
                                 if (!connected) item("access") { AccessCard() }
                             } else if (pageWidgets.isEmpty()) item("empty") {
                                 // A blank page: say what it's for.
@@ -242,7 +255,9 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                                     FilledTonalButton({ requests.pickTarget = Widgets.Target.HOME; requests.pickPage = page; requests.pickWidget = true }) { Text("Add widget") }
                                 }
                             }
-                            items(pageWidgets, key = { "w${it.id}" }) { widget -> HomeWidgetView(widget, editing, columnWidth) }
+                            itemsIndexed(pageWidgets, key = { _, w -> "w${w.id}" }) { i, widget ->
+                                HomeWidgetView(widget, editing, columnWidth, Modifier.fallIn(entrance, (if (page == 0) 2 else 0) + i, cardsFall, Entrance.Kind.CARD))
+                            }
                             if (editing) item("edit-actions") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     FilledTonalButton({ requests.pickTarget = Widgets.Target.HOME; requests.pickPage = page; requests.pickWidget = true }) { Text("Add widget") }
@@ -264,7 +279,8 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha) { pkg -> notificationFilter = pkg; notes.show() }
                         DockColumn(dock, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = railHeight * dockHeight),
-                            iconSize = (railWidth * .57f).dp, alpha = railAlpha, onLaunch = launch, onChoose = { pickDockSlot = it })
+                            iconSize = (railWidth * .57f).dp, alpha = railAlpha, entrance = entrance, animate = iconsFall,
+                            onLaunch = launch, onChoose = { pickDockSlot = it })
                     }
                 }
             }

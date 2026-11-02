@@ -118,6 +118,8 @@ class SettingsActivity : ComponentActivity() {
         val cameraOnly by prefs.wallpaperCameraOnly.collectAsStateWithLifecycle()
         val wpCard by prefs.wallpaperCard.collectAsStateWithLifecycle()
         val stackSeconds by prefs.stackSeconds.collectAsStateWithLifecycle()
+        val animIcons by prefs.animIcons.collectAsStateWithLifecycle()
+        val animCards by prefs.animCards.collectAsStateWithLifecycle()
         val isHome = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
         val hasAccess = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
         val canOverlay = Settings.canDrawOverlays(this)
@@ -199,6 +201,8 @@ class SettingsActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     Toggle("Colours from wallpaper", "Material You: the accent and surfaces follow your wallpaper", wallpaper) { prefs.setWallpaperColors(it) }
                     Toggle("Hide Android's status bar on Home", "The rail shows the same things", hideBar) { prefs.setHideStatusBar(it) }
+                    Toggle("Dock icons fall into place", "When you come back to Home", animIcons) { prefs.setAnimIcons(it) }
+                    Toggle("Home cards fall into place", "The date, Smart Stack and widgets, when you come back to Home", animCards) { prefs.setAnimCards(it) }
                 }
 
                 Group("App drawer") {

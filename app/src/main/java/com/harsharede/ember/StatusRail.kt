@@ -228,6 +228,7 @@ private fun cellIcon(level: Int): ImageVector = when {
  */
 @Composable
 fun DockColumn(apps: List<AppEntry>, modifier: Modifier = Modifier, iconSize: Dp = 52.dp, alpha: Float = .8f,
+               entrance: Entrance? = null, animate: Boolean = false,
                onLaunch: (AppEntry) -> Unit, onChoose: (Int) -> Unit) {
     val prefs = EmberApp.instance.prefs
     val scroll = rememberScrollState()
@@ -237,7 +238,8 @@ fun DockColumn(apps: List<AppEntry>, modifier: Modifier = Modifier, iconSize: Dp
             apps.forEachIndexed { index, app ->
                 var menu by remember { mutableStateOf(false) }
                 Box {
-                    Box(Modifier.clip(CircleShape).combinedClickable(onLongClick = { menu = true }, onClick = { onLaunch(app) }).padding(2.dp)) {
+                    Box(Modifier.then(if (entrance != null) Modifier.fallIn(entrance, index, animate, Entrance.Kind.ICON) else Modifier)
+                        .clip(CircleShape).combinedClickable(onLongClick = { menu = true }, onClick = { onLaunch(app) }).padding(2.dp)) {
                         AppIcon(app, iconSize)
                     }
                     DropdownMenu(menu, { menu = false }) {
@@ -248,7 +250,8 @@ fun DockColumn(apps: List<AppEntry>, modifier: Modifier = Modifier, iconSize: Dp
                     }
                 }
             }
-            Box(Modifier.size(iconSize * .8f).clip(CircleShape).background(Color.White.copy(alpha = .06f)).clickable { onChoose(apps.size) },
+            Box(Modifier.then(if (entrance != null) Modifier.fallIn(entrance, apps.size, animate, Entrance.Kind.ICON) else Modifier)
+                .size(iconSize * .8f).clip(CircleShape).background(Color.White.copy(alpha = .06f)).clickable { onChoose(apps.size) },
                 contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Add, "Add an app to the dock", tint = EmberColors.Secondary)
             }

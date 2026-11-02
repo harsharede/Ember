@@ -64,4 +64,15 @@ class PhotoScoreTest {
         assertEquals("Paris, France", placeName("12", "Paris", null, "France"))
         assertEquals(null, placeName(null, null, null, null))
     }
+
+    @Test fun `falling into place starts above, lands exactly, and is staggered`() {
+        assertEquals(0f, bounceOut(0f), 1e-4f); assertEquals(1f, bounceOut(1f), 1e-4f)
+        assertEquals(0f, backOut(0f), 1e-4f); assertEquals(1f, backOut(1f), 1e-4f)
+        assertTrue(backOut(.7f) > 1f) // overshoots before settling
+        // The first icon is under way before the fifth has started; at the end of the clock all are in place.
+        assertTrue(Entrance.fraction(.1f, 0, Entrance.Kind.ICON) > 0f)
+        assertEquals(0f, Entrance.fraction(.1f, 5, Entrance.Kind.ICON), 0f)
+        assertEquals(1f, Entrance.fraction(1f, 30, Entrance.Kind.ICON), 0f)
+        assertEquals(1f, Entrance.fraction(1f, 30, Entrance.Kind.CARD), 0f)
+    }
 }
