@@ -108,4 +108,41 @@ class LogicTest {
         )
         assertEquals(listOf("Asha", "Ravi"), recentPeople(posts).map { it.name })
     }
+
+    @Test fun `automatic groups don't lump everything under productivity`() {
+        val productivity = android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY
+        assertEquals(AppGroup.SYSTEM, groupFor("com.samsung.android.app.galaxyfinder", productivity, "Finder"))
+        assertEquals(AppGroup.HEALTH, groupFor("com.example.tracker", productivity, "Fit Tracker"))
+        assertEquals(AppGroup.FINANCE, groupFor("com.example.bank", productivity, "My Bank"))
+        assertEquals(AppGroup.PRODUCTIVITY, groupFor("com.example.thing", productivity, "Thing"))
+        assertEquals(AppGroup.SOCIAL, groupFor("com.facebook.katana", -1, "Facebook"))
+        assertEquals(AppGroup.FOOD, groupFor("in.swiggy.android", -1, "Swiggy"))
+    }
+
+    @Test fun `AI answers are read in the formats AIs actually use`() {
+        val labels = mapOf("com.whatsapp" to "WhatsApp", "com.instagram.android" to "Instagram", "com.reddit.frontpage" to "Reddit",
+            "com.spotify.music" to "Spotify", "com.android.chrome" to "Chrome")
+        val plain = parseAiGroups("""
+            Sure! Here you go:
+            Messaging: com.whatsapp
+            Social (2): com.instagram.android, com.reddit.frontpage
+            **Music**: Spotify
+        """.trimIndent(), labels)
+        assertEquals(listOf("Messaging", "Social", "Music"), plain.order)
+        assertEquals("Social", plain.groups["com.reddit.frontpage"])
+        assertEquals("Music", plain.groups["com.spotify.music"])
+        assertEquals(listOf("com.android.chrome"), plain.missing)
+
+        val bullets = parseAiGroups("""
+            ## Social
+            - Instagram (com.instagram.android)
+            - com.reddit.frontpage
+            **Tools:**
+            * Chrome
+        """.trimIndent(), labels)
+        assertEquals("Social", bullets.groups["com.instagram.android"])
+        assertEquals("Social", bullets.groups["com.reddit.frontpage"])
+        assertEquals("Tools", bullets.groups["com.android.chrome"])
+        assertEquals(emptyMap<String, String>(), parseAiGroups("hello there", labels).groups)
+    }
 }

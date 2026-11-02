@@ -145,56 +145,109 @@ fun suggest(apps: List<AppEntry>, launches: Map<String, Prefs.Launch>, exclude: 
         .take(limit).map { it.first }.toList()
 }
 
-/** The drawer's groups. Apps say their own category; for the many that don't, well-known package names fill in. */
+/** The drawer's automatic groups. The user can rename them, make their own, and move any app (see Prefs.appGroups). */
 enum class AppGroup(val title: String) {
-    SOCIAL("Social"), MESSAGING("Messaging"), PRODUCTIVITY("Productivity"), FINANCE("Finance & Shopping"),
+    SOCIAL("Social"), MESSAGING("Messaging"), PRODUCTIVITY("Work & Productivity"), FINANCE("Money"), SHOPPING("Shopping"),
     ENTERTAINMENT("Entertainment"), MUSIC("Music & Audio"), PHOTOS("Photo & Video"), GAMES("Games"),
-    TRAVEL("Travel & Maps"), NEWS("News & Reading"), UTILITIES("Utilities"), OTHER("Other");
+    TRAVEL("Travel & Maps"), NEWS("News & Reading"), HEALTH("Health & Fitness"), FOOD("Food & Delivery"),
+    UTILITIES("Utilities"), SYSTEM("System"), OTHER("Other");
 }
 
-private val PACKAGE_HINTS: List<Pair<String, AppGroup>> = listOf(
-    "whatsapp" to AppGroup.MESSAGING, "telegram" to AppGroup.MESSAGING, "messag" to AppGroup.MESSAGING, "signal" to AppGroup.MESSAGING,
-    "android.mms" to AppGroup.MESSAGING, "skype" to AppGroup.MESSAGING, "discord" to AppGroup.MESSAGING, "slack" to AppGroup.PRODUCTIVITY,
-    "facebook" to AppGroup.SOCIAL, "instagram" to AppGroup.SOCIAL, "twitter" to AppGroup.SOCIAL, "snapchat" to AppGroup.SOCIAL,
-    "linkedin" to AppGroup.SOCIAL, "reddit" to AppGroup.SOCIAL, "threads" to AppGroup.SOCIAL,
-    "teams" to AppGroup.PRODUCTIVITY, "outlook" to AppGroup.PRODUCTIVITY, "office" to AppGroup.PRODUCTIVITY, "gmail" to AppGroup.PRODUCTIVITY,
-    "android.gm" to AppGroup.PRODUCTIVITY, "docs" to AppGroup.PRODUCTIVITY, "calendar" to AppGroup.PRODUCTIVITY, "notes" to AppGroup.PRODUCTIVITY,
-    "drive" to AppGroup.PRODUCTIVITY, "zoom" to AppGroup.PRODUCTIVITY, "keep" to AppGroup.PRODUCTIVITY,
-    "bank" to AppGroup.FINANCE, "pay" to AppGroup.FINANCE, "amex" to AppGroup.FINANCE, "wallet" to AppGroup.FINANCE, "upi" to AppGroup.FINANCE,
-    "amazon" to AppGroup.FINANCE, "flipkart" to AppGroup.FINANCE, "shop" to AppGroup.FINANCE,
-    "youtube" to AppGroup.ENTERTAINMENT, "netflix" to AppGroup.ENTERTAINMENT, "prime" to AppGroup.ENTERTAINMENT, "hotstar" to AppGroup.ENTERTAINMENT,
-    "xstream" to AppGroup.ENTERTAINMENT, "jiocinema" to AppGroup.ENTERTAINMENT,
-    "spotify" to AppGroup.MUSIC, "music" to AppGroup.MUSIC, "podcast" to AppGroup.MUSIC, "jbl" to AppGroup.MUSIC, "audio" to AppGroup.MUSIC,
-    "camera" to AppGroup.PHOTOS, "gallery" to AppGroup.PHOTOS, "photos" to AppGroup.PHOTOS, "video" to AppGroup.PHOTOS,
-    "maps" to AppGroup.TRAVEL, "uber" to AppGroup.TRAVEL, "olacabs" to AppGroup.TRAVEL, "travel" to AppGroup.TRAVEL,
-    "news" to AppGroup.NEWS, "kindle" to AppGroup.NEWS, "reader" to AppGroup.NEWS,
-    "settings" to AppGroup.UTILITIES, "clock" to AppGroup.UTILITIES, "calculator" to AppGroup.UTILITIES, "files" to AppGroup.UTILITIES,
-    "myfiles" to AppGroup.UTILITIES, "dialer" to AppGroup.UTILITIES, "contacts" to AppGroup.UTILITIES, "chrome" to AppGroup.UTILITIES,
-    "browser" to AppGroup.UTILITIES, "vpn" to AppGroup.UTILITIES, "authenticator" to AppGroup.UTILITIES, "phone" to AppGroup.UTILITIES,
+/** Well-known apps by exact package name: the surest signal there is. */
+private val KNOWN_APPS: Map<String, AppGroup> = mapOf(
+    "com.whatsapp" to AppGroup.MESSAGING, "com.whatsapp.w4b" to AppGroup.MESSAGING, "org.telegram.messenger" to AppGroup.MESSAGING,
+    "com.google.android.apps.messaging" to AppGroup.MESSAGING, "com.samsung.android.messaging" to AppGroup.MESSAGING,
+    "com.facebook.orca" to AppGroup.MESSAGING, "org.thoughtcrime.securesms" to AppGroup.MESSAGING, "com.discord" to AppGroup.MESSAGING,
+    "com.instagram.android" to AppGroup.SOCIAL, "com.facebook.katana" to AppGroup.SOCIAL, "com.twitter.android" to AppGroup.SOCIAL,
+    "com.reddit.frontpage" to AppGroup.SOCIAL, "com.snapchat.android" to AppGroup.SOCIAL, "com.linkedin.android" to AppGroup.SOCIAL,
+    "com.instagram.barcelona" to AppGroup.SOCIAL, "com.pinterest" to AppGroup.SOCIAL,
+    "com.microsoft.teams" to AppGroup.PRODUCTIVITY, "com.microsoft.office.outlook" to AppGroup.PRODUCTIVITY, "com.google.android.gm" to AppGroup.PRODUCTIVITY,
+    "com.google.android.calendar" to AppGroup.PRODUCTIVITY, "com.google.android.keep" to AppGroup.PRODUCTIVITY, "com.google.android.apps.docs" to AppGroup.PRODUCTIVITY,
+    "com.slack" to AppGroup.PRODUCTIVITY, "us.zoom.videomeetings" to AppGroup.PRODUCTIVITY, "com.notion.id" to AppGroup.PRODUCTIVITY,
+    "com.samsung.android.app.notes" to AppGroup.PRODUCTIVITY, "com.samsung.android.calendar" to AppGroup.PRODUCTIVITY,
+    "com.anthropic.claude" to AppGroup.PRODUCTIVITY, "com.openai.chatgpt" to AppGroup.PRODUCTIVITY, "com.google.android.apps.bard" to AppGroup.PRODUCTIVITY,
+    "com.google.android.apps.nbu.paisa.user" to AppGroup.FINANCE, "net.one97.paytm" to AppGroup.FINANCE, "com.phonepe.app" to AppGroup.FINANCE,
+    "com.samsung.android.spay" to AppGroup.FINANCE, "com.google.android.apps.walletnfcrel" to AppGroup.FINANCE, "com.americanexpress.android.acctsvcs.in" to AppGroup.FINANCE,
+    "in.amazon.mShop.android.shopping" to AppGroup.SHOPPING, "com.amazon.mShop.android.shopping" to AppGroup.SHOPPING, "com.flipkart.android" to AppGroup.SHOPPING,
+    "com.myntra.android" to AppGroup.SHOPPING, "com.android.vending" to AppGroup.SHOPPING, "com.sec.android.app.samsungapps" to AppGroup.SHOPPING,
+    "com.google.android.youtube" to AppGroup.ENTERTAINMENT, "com.netflix.mediaclient" to AppGroup.ENTERTAINMENT, "in.startv.hotstar" to AppGroup.ENTERTAINMENT,
+    "com.amazon.avod.thirdpartyclient" to AppGroup.ENTERTAINMENT, "com.airtel.xstream" to AppGroup.ENTERTAINMENT,
+    "com.spotify.music" to AppGroup.MUSIC, "com.google.android.apps.youtube.music" to AppGroup.MUSIC, "com.jbl.oneapp" to AppGroup.MUSIC,
+    "com.harman.jblconnectplus" to AppGroup.MUSIC, "com.audible.application" to AppGroup.MUSIC,
+    "com.sec.android.app.camera" to AppGroup.PHOTOS, "com.sec.android.gallery3d" to AppGroup.PHOTOS, "com.google.android.apps.photos" to AppGroup.PHOTOS,
+    "com.google.android.GoogleCamera" to AppGroup.PHOTOS, "com.samsung.android.video" to AppGroup.PHOTOS,
+    "com.google.android.apps.maps" to AppGroup.TRAVEL, "com.ubercab" to AppGroup.TRAVEL, "com.olacabs.customer" to AppGroup.TRAVEL,
+    "com.makemytrip" to AppGroup.TRAVEL, "com.airbnb.android" to AppGroup.TRAVEL,
+    "com.google.android.apps.magazines" to AppGroup.NEWS, "com.nis.app" to AppGroup.NEWS, "com.amazon.kindle" to AppGroup.NEWS, "flipboard.app" to AppGroup.NEWS,
+    "com.sec.android.app.shealth" to AppGroup.HEALTH, "com.google.android.apps.fitness" to AppGroup.HEALTH, "com.strava" to AppGroup.HEALTH,
+    "com.application.zomato" to AppGroup.FOOD, "in.swiggy.android" to AppGroup.FOOD, "com.ubercab.eats" to AppGroup.FOOD,
+    "com.android.chrome" to AppGroup.UTILITIES, "com.sec.android.app.sbrowser" to AppGroup.UTILITIES, "com.duckduckgo.mobile.android" to AppGroup.UTILITIES,
+    "com.microsoft.emmx" to AppGroup.UTILITIES, "com.google.android.dialer" to AppGroup.UTILITIES, "com.samsung.android.dialer" to AppGroup.UTILITIES,
+    "com.sec.android.app.clockpackage" to AppGroup.UTILITIES, "com.sec.android.app.popupcalculator" to AppGroup.UTILITIES,
+    "com.sec.android.app.myfiles" to AppGroup.UTILITIES, "com.samsung.android.app.contacts" to AppGroup.UTILITIES,
+    "com.android.settings" to AppGroup.SYSTEM,
 )
 
-fun groupOf(app: AppEntry): AppGroup = groupFor(app.packageName, app.category)
+/** Words in the package or app name, most specific first. */
+private val HINTS: List<Pair<String, AppGroup>> = listOf(
+    "whatsapp" to AppGroup.MESSAGING, "telegram" to AppGroup.MESSAGING, "messag" to AppGroup.MESSAGING, "signal" to AppGroup.MESSAGING,
+    "chat" to AppGroup.MESSAGING, "mms" to AppGroup.MESSAGING, "sms" to AppGroup.MESSAGING,
+    "facebook" to AppGroup.SOCIAL, "instagram" to AppGroup.SOCIAL, "twitter" to AppGroup.SOCIAL, "reddit" to AppGroup.SOCIAL, "social" to AppGroup.SOCIAL,
+    "bank" to AppGroup.FINANCE, "wallet" to AppGroup.FINANCE, "upi" to AppGroup.FINANCE, "finance" to AppGroup.FINANCE, "invest" to AppGroup.FINANCE,
+    "trading" to AppGroup.FINANCE, "credit" to AppGroup.FINANCE, "card" to AppGroup.FINANCE, "pay" to AppGroup.FINANCE, "money" to AppGroup.FINANCE,
+    "shop" to AppGroup.SHOPPING, "store" to AppGroup.SHOPPING, "amazon" to AppGroup.SHOPPING,
+    "food" to AppGroup.FOOD, "eats" to AppGroup.FOOD, "pizza" to AppGroup.FOOD, "restaurant" to AppGroup.FOOD, "grocer" to AppGroup.FOOD,
+    "health" to AppGroup.HEALTH, "fit" to AppGroup.HEALTH, "workout" to AppGroup.HEALTH, "yoga" to AppGroup.HEALTH, "medic" to AppGroup.HEALTH,
+    "game" to AppGroup.GAMES, "puzzle" to AppGroup.GAMES, "chess" to AppGroup.GAMES,
+    "music" to AppGroup.MUSIC, "podcast" to AppGroup.MUSIC, "radio" to AppGroup.MUSIC, "audio" to AppGroup.MUSIC, "sound" to AppGroup.MUSIC,
+    "camera" to AppGroup.PHOTOS, "gallery" to AppGroup.PHOTOS, "photo" to AppGroup.PHOTOS, "video" to AppGroup.PHOTOS, "editor" to AppGroup.PHOTOS,
+    "tv" to AppGroup.ENTERTAINMENT, "movie" to AppGroup.ENTERTAINMENT, "stream" to AppGroup.ENTERTAINMENT, "cinema" to AppGroup.ENTERTAINMENT,
+    "map" to AppGroup.TRAVEL, "travel" to AppGroup.TRAVEL, "flight" to AppGroup.TRAVEL, "hotel" to AppGroup.TRAVEL, "cab" to AppGroup.TRAVEL,
+    "rail" to AppGroup.TRAVEL, "metro" to AppGroup.TRAVEL, "ride" to AppGroup.TRAVEL,
+    "news" to AppGroup.NEWS, "reader" to AppGroup.NEWS, "book" to AppGroup.NEWS, "magazine" to AppGroup.NEWS,
+    "mail" to AppGroup.PRODUCTIVITY, "office" to AppGroup.PRODUCTIVITY, "docs" to AppGroup.PRODUCTIVITY, "calendar" to AppGroup.PRODUCTIVITY,
+    "notes" to AppGroup.PRODUCTIVITY, "teams" to AppGroup.PRODUCTIVITY, "meet" to AppGroup.PRODUCTIVITY, "drive" to AppGroup.PRODUCTIVITY,
+    "task" to AppGroup.PRODUCTIVITY, "todo" to AppGroup.PRODUCTIVITY, "scan" to AppGroup.PRODUCTIVITY,
+    "browser" to AppGroup.UTILITIES, "clock" to AppGroup.UTILITIES, "calculator" to AppGroup.UTILITIES, "files" to AppGroup.UTILITIES,
+    "contacts" to AppGroup.UTILITIES, "dialer" to AppGroup.UTILITIES, "phone" to AppGroup.UTILITIES, "vpn" to AppGroup.UTILITIES,
+    "authenticator" to AppGroup.UTILITIES, "weather" to AppGroup.UTILITIES, "translate" to AppGroup.UTILITIES, "recorder" to AppGroup.UTILITIES,
+    "settings" to AppGroup.SYSTEM,
+)
 
-fun groupFor(packageName: String, category: Int): AppGroup {
-    val byCategory = when (category) {
-        android.content.pm.ApplicationInfo.CATEGORY_GAME -> AppGroup.GAMES
-        android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> AppGroup.MUSIC
-        android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> AppGroup.ENTERTAINMENT
-        android.content.pm.ApplicationInfo.CATEGORY_IMAGE -> AppGroup.PHOTOS
-        android.content.pm.ApplicationInfo.CATEGORY_SOCIAL -> AppGroup.SOCIAL
-        android.content.pm.ApplicationInfo.CATEGORY_NEWS -> AppGroup.NEWS
-        android.content.pm.ApplicationInfo.CATEGORY_MAPS -> AppGroup.TRAVEL
-        android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY -> AppGroup.PRODUCTIVITY
-        android.content.pm.ApplicationInfo.CATEGORY_ACCESSIBILITY -> AppGroup.UTILITIES
-        else -> null
-    }
-    // A name hint wins over a vague category: chat apps often call themselves "social".
+/** Phone-maker and Android apps nobody would file under "productivity" (which many of them claim to be). */
+private val SYSTEM_PREFIXES = listOf("com.samsung.", "com.sec.", "com.android.", "com.google.android.gms", "com.google.android.as",
+    "com.google.android.apps.wellbeing", "com.osp.", "com.monotype.", "com.diotek.")
+
+fun groupOf(app: AppEntry): AppGroup = groupFor(app.packageName, app.category, app.label)
+
+/**
+ * The automatic group: a well-known app's own entry first, then words in its package or name, then the category the
+ * app declares (except "productivity", which so many claim that it says little), then System for phone-maker apps, and
+ * only then the declared productivity.
+ */
+fun groupFor(packageName: String, category: Int, label: String = ""): AppGroup {
+    KNOWN_APPS[packageName]?.let { return it }
     val pkg = packageName.lowercase()
-    val hint = PACKAGE_HINTS.firstOrNull { pkg.contains(it.first) }?.second
-    return when {
-        hint == AppGroup.MESSAGING -> hint
-        byCategory != null -> byCategory
-        hint != null -> hint
-        else -> AppGroup.OTHER
+    val name = label.lowercase()
+    // The app's own name is matched by whole word ("Fit" but not "Profit"); the package by part.
+    val words = name.split(' ', '-', '_', '.', '&').filter { it.isNotBlank() }
+    val hint = HINTS.firstOrNull { (key, _) -> words.any { it == key || it.startsWith(key) } }?.second
+        ?: HINTS.firstOrNull { (key, _) -> key.length >= 4 && pkg.contains(key) }?.second
+    if (hint != null) return hint
+    when (category) {
+        android.content.pm.ApplicationInfo.CATEGORY_GAME -> return AppGroup.GAMES
+        android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> return AppGroup.MUSIC
+        android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> return AppGroup.ENTERTAINMENT
+        android.content.pm.ApplicationInfo.CATEGORY_IMAGE -> return AppGroup.PHOTOS
+        android.content.pm.ApplicationInfo.CATEGORY_SOCIAL -> return AppGroup.SOCIAL
+        android.content.pm.ApplicationInfo.CATEGORY_NEWS -> return AppGroup.NEWS
+        android.content.pm.ApplicationInfo.CATEGORY_MAPS -> return AppGroup.TRAVEL
+        android.content.pm.ApplicationInfo.CATEGORY_ACCESSIBILITY -> return AppGroup.UTILITIES
     }
+    if (SYSTEM_PREFIXES.any { pkg.startsWith(it) }) return AppGroup.SYSTEM
+    if (category == android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY) return AppGroup.PRODUCTIVITY
+    return AppGroup.OTHER
 }
+
+/** The group the drawer shows an app in: the user's own choice (by hand or from AI) if there is one, else automatic. */
+fun groupNameOf(app: AppEntry, overrides: Map<String, String>): String = overrides[app.packageName] ?: groupOf(app).title

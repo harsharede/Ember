@@ -78,6 +78,22 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Ember.Light" />
 
+        <!-- Receives an AI's grouping of the user's apps, shared back from the AI app. Switched on only while Ember is
+             waiting for one (see AiGroups.listenForAnswer), so it isn't in every share menu. -->
+        <activity
+            android:name=".AiGroupsActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.harsharede.ember.aigroups"
+            android:label="Ember: apply app groups">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".EmberNotificationListener"
             android:exported="true"

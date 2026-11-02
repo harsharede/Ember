@@ -40,6 +40,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -197,40 +200,70 @@ private fun DrawerRow(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: 
 }
 
 @Composable
-private fun AppMenu(app: AppEntry, open: Boolean, onDismiss: () -> Unit, onAddToDock: (AppEntry) -> Unit) {
+private fun AppMenu(app: AppEntry, open: Boolean, onDismiss: () -> Unit, onAddToDock: (AppEntry) -> Unit, onMove: (() -> Unit)? = null) {
     val repo = EmberApp.instance.apps
     DropdownMenu(open, onDismiss) {
         DropdownMenuItem({ Text("Add to dock") }, { onDismiss(); onAddToDock(app) })
+        if (onMove != null) DropdownMenuItem({ Text("Move to group…") }, { onDismiss(); onMove() })
         DropdownMenuItem({ Text("App info") }, { onDismiss(); repo.openAppInfo(app) })
         DropdownMenuItem({ Text("Uninstall") }, { onDismiss(); repo.uninstall(app) })
     }
 }
 
-/** Apps in groups, as cards; tap a card to open the whole group. */
+/**
+ * Apps in groups, as cards; tap a card to open the whole group. Groups come from the user's own choices first (moved
+ * by hand or sorted by AI), automatic otherwise. Hold a card to rename or ungroup it; hold an app to move it.
+ */
 @Composable
 private fun GroupedApps(apps: List<AppEntry>, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
-    val groups = remember(apps) { apps.groupBy(::groupOf).toSortedMap(compareBy<AppGroup> { it == AppGroup.OTHER }.thenBy { it.ordinal }) }
-    var openGroup by remember { mutableStateOf<AppGroup?>(null) }
+    val prefs = EmberApp.instance.prefs
+    val overrides by prefs.appGroups.collectAsStateWithLifecycle()
+    val order by prefs.groupOrder.collectAsStateWithLifecycle()
+    val groups = remember(apps, overrides, order) {
+        val auto = AppGroup.entries.map { it.title }
+        apps.groupBy { groupNameOf(it, overrides) }.entries
+            .sortedWith(compareBy({ it.key == AppGroup.OTHER.title }, { order.indexOf(it.key).let { i -> if (i < 0) 1000 + auto.indexOf(it.key) else i } }, { it.key }))
+            .associate { it.key to it.value }
+    }
+    var openGroup by remember { mutableStateOf<String?>(null) }
+    var moving by remember { mutableStateOf<AppEntry?>(null) }
+    var renaming by remember { mutableStateOf<String?>(null) }
+    var aiSheet by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize().then(if (layer != null) Modifier.nestedScroll(layer.closeConnection) else Modifier),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(groups.entries.toList(), key = { it.key.name }) { (group, list) ->
-                Column(Modifier.clip(RoundedCornerShape(28.dp)).clickable { openGroup = group }) {
-                    Column(Modifier.fillMaxWidth().aspectRatio(1f).glass().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        list.take(4).chunked(2).forEach { pair ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                pair.forEach { app ->
-                                    Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(50)).clickable { onLaunch(app) }, contentAlignment = Alignment.Center) {
-                                        AppIcon(app, 56.dp)
+            item(key = "ai", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.FilledTonalButton({ aiSheet = true }) {
+                        Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Text("  Sort with AI")
+                    }
+                    if (overrides.isNotEmpty()) androidx.compose.material3.TextButton({ prefs.resetAppGroups() }) { Text("Automatic") }
+                }
+            }
+            items(groups.entries.toList(), key = { "g-" + it.key }) { (group, list) ->
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    Column(Modifier.clip(RoundedCornerShape(28.dp)).combinedClickable(onLongClick = { menu = true }) { openGroup = group }) {
+                        Column(Modifier.fillMaxWidth().aspectRatio(1f).glass().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            list.take(4).chunked(2).forEach { pair ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    pair.forEach { app ->
+                                        Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(50)).clickable { onLaunch(app) }, contentAlignment = Alignment.Center) {
+                                            AppIcon(app, 56.dp)
+                                        }
                                     }
+                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
                                 }
-                                if (pair.size == 1) Spacer(Modifier.weight(1f))
                             }
                         }
+                        Text("$group  ·  ${list.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
                     }
-                    Text("${group.title}  ·  ${list.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                    DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem({ Text("Rename") }, { menu = false; renaming = group })
+                        if (overrides.containsValue(group)) DropdownMenuItem({ Text("Ungroup (back to automatic)") }, { menu = false; prefs.ungroup(group) })
+                    }
                 }
             }
         }
@@ -242,18 +275,54 @@ private fun GroupedApps(apps: List<AppEntry>, layer: Layer?, onLaunch: (AppEntry
                 .clickable(remember { MutableInteractionSource() }, null) { openGroup = null }, contentAlignment = Alignment.Center) {
                 Column(Modifier.padding(20.dp).glass(RoundedCornerShape(32.dp), alpha = .97f).clickable(remember { MutableInteractionSource() }, null) {}
                     .padding(18.dp)) {
-                    Text(group.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 12.dp))
+                    Text(group, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 12.dp))
                     LazyVerticalGrid(GridCells.Fixed(4), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        items(groups[group].orEmpty(), key = { it.key }) { app -> GridApp(app, onLaunch, onAddToDock) }
+                        items(groups[group].orEmpty(), key = { it.key }) { app -> GridApp(app, onLaunch, onAddToDock, onMove = { moving = app }) }
                     }
                 }
             }
         }
     }
+    moving?.let { app ->
+        GroupNameDialog("Move ${app.label} to", groups.keys.toList(), current = groupNameOf(app, overrides),
+            onPick = { name -> prefs.setAppGroup(app.packageName, name); moving = null }, onDismiss = { moving = null })
+    }
+    renaming?.let { old ->
+        GroupNameDialog("Rename \"$old\"", emptyList(), current = old, onPick = { name ->
+            // An automatic group gets its apps written down under the new name; a user group is simply renamed.
+            if (overrides.containsValue(old)) prefs.renameGroup(old, name)
+            else prefs.setAppGroups(groups[old].orEmpty().map { it.packageName }, name)
+            if (openGroup == old) openGroup = name
+            renaming = null
+        }, onDismiss = { renaming = null })
+    }
+    if (aiSheet) AiGroupsSheet(apps, onClose = { aiSheet = false })
+}
+
+/** Choose an existing group or type a new name. */
+@Composable
+private fun GroupNameDialog(title: String, existing: List<String>, current: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf(if (existing.isEmpty()) current else "") }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onDismiss, title = { Text(title) },
+        confirmButton = { androidx.compose.material3.TextButton({ if (name.isNotBlank()) onPick(name.trim()) }, enabled = name.isNotBlank()) {
+            Text(if (existing.isEmpty()) "Rename" else "New group") } },
+        dismissButton = { androidx.compose.material3.TextButton(onDismiss) { Text("Cancel") } },
+        text = {
+            Column {
+                if (existing.isNotEmpty()) LazyColumn(Modifier.heightIn(max = 260.dp)) {
+                    items(existing.filter { it != current }) { g ->
+                        Text(g, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                            .clickable { onPick(g) }.padding(vertical = 10.dp, horizontal = 4.dp))
+                    }
+                }
+                androidx.compose.material3.OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true,
+                    placeholder = { Text(if (existing.isEmpty()) "Group name" else "Or a new group") })
+            }
+        })
 }
 
 @Composable
-private fun GridApp(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
+private fun GridApp(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit, onMove: (() -> Unit)? = null) {
     var menu by remember { mutableStateOf(false) }
     Box {
         Column(Modifier.clip(RoundedCornerShape(16.dp)).combinedClickable(onLongClick = { menu = true }) { onLaunch(app) }.padding(4.dp),
@@ -262,7 +331,7 @@ private fun GridApp(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (A
             Text(app.label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = 4.dp))
         }
-        AppMenu(app, menu, { menu = false }, onAddToDock)
+        AppMenu(app, menu, { menu = false }, onAddToDock, onMove)
     }
 }
 

@@ -199,6 +199,43 @@ class Prefs(context: Context) {
         flow.value = ids; sp.edit().putStringSet(key, ids.mapTo(HashSet()) { it.toString() }).apply()
     }
 
+    // The user's own grouping: package -> group name (by hand or from AI), and the order groups appear in.
+    private val _appGroups = MutableStateFlow(readAppGroups())
+    val appGroups: StateFlow<Map<String, String>> = _appGroups.asStateFlow()
+    private val _groupOrder = MutableStateFlow(sp.getString(KEY_GROUP_ORDER, null).orEmpty().split(SEP).filter { it.isNotBlank() })
+    val groupOrder: StateFlow<List<String>> = _groupOrder.asStateFlow()
+
+    /** Put one app in [group], or back to automatic with null. */
+    fun setAppGroup(packageName: String, group: String?) {
+        saveAppGroups(if (group == null) _appGroups.value - packageName else _appGroups.value + (packageName to group))
+        if (group != null && group !in _groupOrder.value) saveGroupOrder(_groupOrder.value + group)
+    }
+    /** Give several apps a group at once (renaming an automatic group does this). */
+    fun setAppGroups(packages: Collection<String>, group: String) {
+        saveAppGroups(_appGroups.value + packages.associateWith { group })
+        if (group !in _groupOrder.value) saveGroupOrder(_groupOrder.value + group)
+    }
+    /** Replace the whole grouping (from AI): every app it names gets its group; the rest go back to automatic. */
+    fun replaceAppGroups(groups: Map<String, String>, order: List<String>) { saveAppGroups(groups); saveGroupOrder(order) }
+    fun renameGroup(from: String, to: String) {
+        saveAppGroups(_appGroups.value.mapValues { (_, g) -> if (g == from) to else g })
+        saveGroupOrder(_groupOrder.value.map { if (it == from) to else it }.distinct())
+    }
+    /** Send a group's apps back to automatic grouping. */
+    fun ungroup(group: String) {
+        saveAppGroups(_appGroups.value.filterValues { it != group })
+        saveGroupOrder(_groupOrder.value - group)
+    }
+    fun resetAppGroups() { saveAppGroups(emptyMap()); saveGroupOrder(emptyList()) }
+    private fun saveAppGroups(map: Map<String, String>) {
+        _appGroups.value = map
+        sp.edit().putString(KEY_APP_GROUPS, map.entries.joinToString(SEP) { "${it.key}$FIELD${it.value}" }).apply()
+    }
+    private fun saveGroupOrder(list: List<String>) { _groupOrder.value = list; sp.edit().putString(KEY_GROUP_ORDER, list.joinToString(SEP)).apply() }
+    private fun readAppGroups(): Map<String, String> = sp.getString(KEY_APP_GROUPS, null).orEmpty().split(SEP).mapNotNull { line ->
+        val p = line.split(FIELD); if (p.size == 2 && p[0].isNotBlank() && p[1].isNotBlank()) p[0] to p[1] else null
+    }.toMap()
+
     fun setLight(on: Boolean) { _light.value = on; sp.edit().putBoolean(KEY_LIGHT, on).apply() }
     fun setLightMinutes(m: Int) { _lightMinutes.value = m; sp.edit().putInt(KEY_LIGHT_MINUTES, m).apply() }
     fun setLightIcon(on: Boolean) { _lightIcon.value = on; sp.edit().putBoolean(KEY_LIGHT_ICON, on).apply() }
@@ -294,6 +331,8 @@ class Prefs(context: Context) {
         private const val KEY_RAIL_ALPHA = "rail_alpha"
         private const val KEY_CARD_ALPHA = "card_alpha"
         private const val KEY_LIGHT = "light"
+        private const val KEY_APP_GROUPS = "app_groups"
+        private const val KEY_GROUP_ORDER = "group_order"
         private const val KEY_STACK = "stack"
         private const val KEY_STACK_HEIGHT = "stack_height"
         private const val KEY_STACK_SECONDS = "stack_seconds"

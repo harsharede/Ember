@@ -24,6 +24,10 @@ banners.
 - **Pages**: hold Home › Add page for blank pages to fill with widgets; swipe sideways between them.
 - **Swipe up** for the app drawer: every app A to Z (the keyboard opens so you can type straight away) or, one swipe
   across, the same apps in groups. Pull it down to close.
+- **Groups** in the drawer: automatic (well-known apps, names, then the app's declared category), and yours to fix:
+  hold an app › Move to group, hold a group › Rename or Ungroup. **Sort with AI** sends your app list (names and
+  package names only) to Claude, ChatGPT or Gemini through the share sheet or clipboard; share or paste the reply back
+  and Ember shows the groups before applying them. Ember itself sends nothing.
 - **Widgets**: hold Home › Add widget. Edit Home to move, resize or remove them.
 - **Material You**: colours come from your wallpaper (or Ember's orange, in Settings).
 - **Swipe down** (or tap the count) for the notification page: a timeline under Now, Earlier today, Yesterday and
