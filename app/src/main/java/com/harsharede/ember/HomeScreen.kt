@@ -10,7 +10,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -114,7 +116,26 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val dockHeight by app.prefs.dockHeight.collectAsStateWithLifecycle()
     val railAlpha by app.prefs.railAlpha.collectAsStateWithLifecycle()
     val cardAlpha by app.prefs.cardAlpha.collectAsStateWithLifecycle()
-    val homePager = rememberPagerState { pageCount }
+    val wallpaperPage by app.prefs.wallpaperPage.collectAsStateWithLifecycle()
+    // The pages: Today, any widget pages, and last (if on) a page with nothing but the wallpaper.
+    val homePager = rememberPagerState { pageCount + if (wallpaperPage) 1 else 0 }
+    val totalPages = pageCount + if (wallpaperPage) 1 else 0
+    val cleanIndex = pageCount
+    /** How far the wallpaper page has come in, 0 to 1. Read in draw lambdas so swiping doesn't recompose Home. */
+    val clean: () -> Float = {
+        if (!wallpaperPage) 0f else (homePager.currentPage + homePager.currentPageOffsetFraction - (cleanIndex - 1)).coerceIn(0f, 1f)
+    }
+    val cleanNow by remember(wallpaperPage, cleanIndex) {
+        derivedStateOf { wallpaperPage && homePager.currentPage == cleanIndex && kotlin.math.abs(homePager.currentPageOffsetFraction) < .05f }
+    }
+    // On the wallpaper page the navigation bar steps aside too; a swipe from the bottom edge brings it back.
+    val view = androidx.compose.ui.platform.LocalView.current
+    LaunchedEffect(cleanNow) {
+        val window = (view.context as? android.app.Activity)?.window ?: return@LaunchedEffect
+        val controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+        if (cleanNow) controller.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+        else controller.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+    }
     val notifications by NotificationStore.items.collectAsStateWithLifecycle()
     val connected by NotificationStore.connected.collectAsStateWithLifecycle()
     val status by rememberDeviceStatus()
@@ -167,7 +188,19 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                 alpha = 1f - .5f * p
                 scaleX = 1f - .05f * p; scaleY = scaleX
             }
-            .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .40f), .5f to Color.Black.copy(alpha = .12f), 1f to Color.Black.copy(alpha = .40f)))
+            // A light shade at the top and bottom keeps text readable; it fades out on the wallpaper page.
+            .drawBehind {
+                val a = 1f - clean()
+                if (a > 0f) drawRect(Brush.verticalGradient(0f to Color.Black.copy(alpha = .40f * a), .5f to Color.Black.copy(alpha = .12f * a), 1f to Color.Black.copy(alpha = .40f * a)))
+            }
+            // On the wallpaper page a sideways swipe anywhere goes back (the pager itself only spans the left column).
+            .pointerInput(cleanNow) {
+                if (!cleanNow) return@pointerInput
+                var dx = 0f
+                detectHorizontalDragGestures(onDragStart = { dx = 0f }, onDragEnd = {
+                    if (dx > 60.dp.toPx()) scope.launch { homePager.animateScrollToPage(cleanIndex - 1) }
+                }) { change, amount -> change.consume(); dx += amount }
+            }
             .nestedScroll(pull.connection)
             .pointerInput(Unit) {
                 // Drags outside the scrolling column (the rail, empty space): up for apps, down for notifications.
@@ -190,6 +223,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                     val columnWidth = maxWidth.value.toInt()
                     // Swipe sideways for more pages; the rail stays where it is.
                     HorizontalPager(homePager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, pageSpacing = 24.dp) { page ->
+                        if (page == cleanIndex) { Box(Modifier.fillMaxSize()); return@HorizontalPager }
                         val pageWidgets = widgets.filter { it.page == page || (page == pageCount - 1 && it.page >= pageCount) }
                         LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 90.dp)) {
                             if (page == 0) {
@@ -224,7 +258,8 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                 }
                 // The rail: status on top, then the dock taking the room that's left (up to the height chosen in Customize
                 // look). When the capsule grows, the dock gets shorter and scrolls, with an arrow saying there's more.
-                BoxWithConstraints(Modifier.width(railWidth.dp).fillMaxHeight().padding(bottom = 8.dp)) {
+                BoxWithConstraints(Modifier.width(railWidth.dp).fillMaxHeight().padding(bottom = 8.dp)
+                    .graphicsLayer { alpha = 1f - clean() }.then(if (cleanNow) Modifier.blockTouches() else Modifier)) {
                     val railHeight = maxHeight
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha) { pkg -> notificationFilter = pkg; notes.show() }
@@ -235,8 +270,9 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             }
             }
             // Page dots, when there's more than one page. Tap one to go there.
-            if (pageCount > 1) Row(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 40.dp, end = railWidth.dp)) {
-                repeat(pageCount) { i ->
+            if (totalPages > 1 && !cleanNow) Row(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 40.dp, end = railWidth.dp)
+                .graphicsLayer { alpha = 1f - clean() }) {
+                repeat(totalPages) { i ->
                     val selected = i == homePager.currentPage
                     Box(Modifier.clip(CircleShape).clickable { scope.launch { homePager.animateScrollToPage(i) } }.padding(5.dp)) {
                         Box(Modifier.size(if (selected) 8.dp else 6.dp).clip(CircleShape)
@@ -246,7 +282,8 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             }
             // The wallpaper control: tiny, bottom-left.
             // A small handle says there's more below.
-            Box(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 10.dp)
+            if (!cleanNow) Box(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 10.dp)
+                .graphicsLayer { alpha = 1f - clean() }
                 .clip(RoundedCornerShape(50)).clickable { drawer.show() }.padding(horizontal = 24.dp, vertical = 10.dp)) {
                 Box(Modifier.width(44.dp).height(5.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = .45f)))
             }
@@ -267,7 +304,8 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             }
             // The wallpaper control: tiny, bottom-left, opening upwards. Last, so it sits above everything else on Home
             // (the drawer handle used to cover its buttons).
-            if (wallpaperCard) WallpaperMini(Modifier.align(Alignment.BottomStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 14.dp, bottom = 10.dp))
+            if (wallpaperCard && !cleanNow) WallpaperMini(Modifier.align(Alignment.BottomStart).windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(start = 14.dp, bottom = 10.dp).graphicsLayer { alpha = 1f - clean() })
         }
 
         // The layers stay composed, parked off screen, so they open on the first frame of a swipe with nothing to build.
@@ -342,5 +380,12 @@ private fun AccessCard() {
         Text("Finish setting up Ember", style = MaterialTheme.typography.titleSmall)
         Text("Allow notification access for the rail, the notification page and the glowing pill.", color = EmberColors.Secondary,
             fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** Takes every touch so nothing under it can be tapped (the faded-out rail on the wallpaper page). */
+private fun Modifier.blockTouches(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() }
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -33,6 +34,7 @@ fun LookSheet(onClose: () -> Unit) {
     val dockHeight by prefs.dockHeight.collectAsStateWithLifecycle()
     val railAlpha by prefs.railAlpha.collectAsStateWithLifecycle()
     val cardAlpha by prefs.cardAlpha.collectAsStateWithLifecycle()
+    val wallpaperPage by prefs.wallpaperPage.collectAsStateWithLifecycle()
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         scrimColor = Color.Transparent, containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .96f)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp).navigationBarsPadding()) {
@@ -53,6 +55,13 @@ fun LookSheet(onClose: () -> Unit) {
             }
             Setting("Card transparency", "${((1 - cardAlpha) * 100).roundToInt()}%") {
                 Slider(1 - cardAlpha, { prefs.setCardAlpha(1 - it) }, valueRange = 0f..1f)
+            }
+            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Wallpaper-only page", style = MaterialTheme.typography.bodyLarge)
+                    Text("The last page, with nothing but the wallpaper", style = MaterialTheme.typography.bodyMedium, color = EmberColors.Secondary)
+                }
+                Switch(wallpaperPage, { prefs.setWallpaperPage(it) })
             }
         }
     }

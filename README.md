@@ -21,7 +21,8 @@ banners.
   grows). Hold an app to change, move or remove it. - **Wallpaper button**: tiny, in the bottom-left corner. Tap it for where and when the photo was taken (scrolling past;
   tap to open the photo), ♥, new photo and 👎.
 - **Customize look** (hold Home): rail width, dock height, rail and card transparency, live.
-- **Pages**: hold Home › Add page for blank pages to fill with widgets; swipe sideways between them.
+- **Pages**: hold Home › Add page for blank pages to fill with widgets; swipe sideways between them. The last page shows
+  nothing but the wallpaper: the rail, cards, buttons and navigation bar fade away (switch it off in Customize look).
 - **Swipe up** for the app drawer: every app A to Z (the keyboard opens so you can type straight away) or, one swipe
   across, the same apps in groups. Pull it down to close.
 - **Groups** in the drawer: automatic (well-known apps, names, then the app's declared category), and yours to fix:

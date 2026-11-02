@@ -80,6 +80,10 @@ class Prefs(context: Context) {
     private val _cardAlpha = MutableStateFlow(sp.getFloat(KEY_CARD_ALPHA, .8f))
     /** How solid Home's cards are (the Smart Stack, suggestions, Ember's cards). */
     val cardAlpha: StateFlow<Float> = _cardAlpha.asStateFlow()
+    private val _wallpaperPage = MutableStateFlow(sp.getBoolean(KEY_WALLPAPER_PAGE, true))
+    /** A last Home page with nothing on it but the wallpaper. */
+    val wallpaperPage: StateFlow<Boolean> = _wallpaperPage.asStateFlow()
+    fun setWallpaperPage(on: Boolean) { _wallpaperPage.value = on; sp.edit().putBoolean(KEY_WALLPAPER_PAGE, on).apply() }
     fun setRailWidth(dp: Int) { _railWidth.value = dp; sp.edit().putInt(KEY_RAIL_WIDTH, dp).apply() }
     fun setDockHeight(f: Float) { _dockHeight.value = f; sp.edit().putFloat(KEY_DOCK_HEIGHT, f).apply() }
     fun setRailAlpha(a: Float) { _railAlpha.value = a; sp.edit().putFloat(KEY_RAIL_ALPHA, a).apply() }
@@ -327,6 +331,7 @@ class Prefs(context: Context) {
         private const val KEY_WIDGETS = "widgets"
         private const val KEY_PAGES = "pages"
         private const val KEY_RAIL_WIDTH = "rail_width"
+        private const val KEY_WALLPAPER_PAGE = "wallpaper_page"
         private const val KEY_DOCK_HEIGHT = "dock_height"
         private const val KEY_RAIL_ALPHA = "rail_alpha"
         private const val KEY_CARD_ALPHA = "card_alpha"
