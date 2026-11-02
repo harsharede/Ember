@@ -44,8 +44,17 @@ fun LookSheet(onClose: () -> Unit) {
     val animCards by prefs.animCards.collectAsStateWithLifecycle()
     val parallax by prefs.parallax.collectAsStateWithLifecycle()
     val weatherFx by prefs.weatherEffects.collectAsStateWithLifecycle()
+    val headerWeather by prefs.headerWeather.collectAsStateWithLifecycle()
+    val place by prefs.weatherPlace.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var askPlace by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val location = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) { prefs.setWeatherPlace(null); WeatherStore.refresh(context, force = true) }
+    }
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        scrimColor = Color.Transparent, containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .96f)) {
+        scrimColor = Color.Transparent, containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .96f),
+        contentColor = MaterialTheme.colorScheme.onSurface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp).navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Customize look", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
@@ -83,10 +92,29 @@ fun LookSheet(onClose: () -> Unit) {
             }
             Text("Wallpaper", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 18.dp))
             SwitchRow("Parallax", "The wallpaper pans a little as you swipe between pages", parallax) { prefs.setParallax(it) }
-            SwitchRow("Weather on the wallpaper", "Rain, snow, fog, sun or stars to match the forecast (needs the Weather card's place)", weatherFx) { prefs.setWeatherEffects(it) }
+            SwitchRow("Weather on the wallpaper", "Rain, snow, clouds, fog, sun or stars to match the forecast", weatherFx) { prefs.setWeatherEffects(it) }
+            SwitchRow("Weather beside the day", "Icons for the next five hours next to the day's name", headerWeather) { prefs.setHeaderWeather(it) }
+            val hasLocation = CardData.granted(context, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Weather place", style = MaterialTheme.typography.bodyLarge)
+                    Text(place?.first ?: if (hasLocation) "My location" else "Not set yet: the weather needs a place",
+                        style = MaterialTheme.typography.bodyMedium, color = if (place == null && !hasLocation) MaterialTheme.colorScheme.error else EmberColors.Secondary)
+                }
+                TextButton({ askPlace = true }) { Text("Change") }
+            }
             Text("Coming back to Home", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 18.dp))
             SwitchRow("Dock icons come back into place", "One after another; pick the style in Settings › Animations", animIcons) { prefs.setAnimIcons(it) }
+            if (askPlace) WeatherPlaceDialog(
+                onLocation = {
+                    askPlace = false
+                    if (hasLocation) { prefs.setWeatherPlace(null); WeatherStore.refresh(context, force = true) }
+                    else location.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                },
+                onCity = { p -> askPlace = false; prefs.setWeatherPlace(p); WeatherStore.refresh(context, force = true) },
+                onDismiss = { askPlace = false },
+            )
             SwitchRow("Home cards come back into place", "The date, Smart Stack and widgets", animCards) { prefs.setAnimCards(it) }
         }
     }

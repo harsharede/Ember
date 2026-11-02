@@ -334,6 +334,15 @@ class Prefs(context: Context) {
         sp.edit().putStringSet(KEY_NUDGED, kept + key).apply()
     }
 
+    private val _statusShowOff = MutableStateFlow(sp.getBoolean(KEY_STATUS_OFF, false))
+    /** Show Wi-Fi, Bluetooth and the like dimmed while off, so they can be tapped back on. */
+    val statusShowOff: StateFlow<Boolean> = _statusShowOff.asStateFlow()
+    fun setStatusShowOff(on: Boolean) { _statusShowOff.value = on; sp.edit().putBoolean(KEY_STATUS_OFF, on).apply() }
+    private val _headerWeather = MutableStateFlow(sp.getBoolean(KEY_HEADER_WEATHER, true))
+    /** Weather icons for the next hours beside the day's name. */
+    val headerWeather: StateFlow<Boolean> = _headerWeather.asStateFlow()
+    fun setHeaderWeather(on: Boolean) { _headerWeather.value = on; sp.edit().putBoolean(KEY_HEADER_WEATHER, on).apply() }
+
     fun setLight(on: Boolean) { _light.value = on; sp.edit().putBoolean(KEY_LIGHT, on).apply() }
     fun setLightMinutes(m: Int) { _lightMinutes.value = m; sp.edit().putInt(KEY_LIGHT_MINUTES, m).apply() }
     fun setLightIcon(on: Boolean) { _lightIcon.value = on; sp.edit().putBoolean(KEY_LIGHT_ICON, on).apply() }
@@ -436,6 +445,8 @@ class Prefs(context: Context) {
         private const val KEY_RAIL_ALPHA = "rail_alpha"
         private const val KEY_CARD_ALPHA = "card_alpha"
         private const val KEY_LIGHT = "light"
+        private const val KEY_STATUS_OFF = "status_show_off"
+        private const val KEY_HEADER_WEATHER = "header_weather"
         private const val KEY_HIDDEN_APPS = "hidden_apps"
         private const val KEY_FOCUS_APPS = "focus_apps"
         private const val KEY_FOCUS_UNTIL = "focus_until"

@@ -72,7 +72,10 @@ fun EmberTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val fromWallpaper by EmberApp.instance.prefs.wallpaperColors.collectAsState()
     val scheme = if (fromWallpaper) dynamicDarkColorScheme(context) else EmberScheme
-    MaterialTheme(colorScheme = scheme, content = content)
+    // Text with no colour of its own is light on Ember's dark surfaces (it was black, unreadable, outside a Surface).
+    MaterialTheme(colorScheme = scheme) {
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides scheme.onSurface, content = content)
+    }
 }
 
 /** How solid glass surfaces are; Home sets it from "Card transparency". */

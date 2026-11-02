@@ -310,7 +310,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                     .graphicsLayer { alpha = 1f - clean() }.then(if (cleanNow) Modifier.blockTouches() else Modifier)) {
                     val railHeight = maxHeight
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha, shape = railShape) { pkg -> notificationFilter = pkg; notes.show() }
+                        StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha, shape = railShape, widthDp = railWidth) { pkg -> notificationFilter = pkg; notes.show() }
                         DockColumn(dock, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = railHeight * dockHeight),
                             iconSize = (railWidth * .57f).dp, alpha = railAlpha, entrance = entrance, animate = iconsFall, shape = railShape,
                             onLaunch = launch, onChoose = { pickDockSlot = it })
@@ -395,9 +395,21 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
 @Composable
 private fun DateHeader(now: Long) {
     val date = Date(now)
+    val showWeather by EmberApp.instance.prefs.headerWeather.collectAsStateWithLifecycle()
+    val weather by WeatherStore.now.collectAsStateWithLifecycle()
     Column(Modifier.padding(top = 2.dp)) {
-        Text(SimpleDateFormat("EEEE", Locale.getDefault()).format(date).uppercase(), color = MaterialTheme.colorScheme.primary,
-            fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(SimpleDateFormat("EEEE", Locale.getDefault()).format(date).uppercase(), color = MaterialTheme.colorScheme.primary,
+                fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            // The next few hours' weather, as icons only, one per hour.
+            val next = weather?.next.orEmpty()
+            if (showWeather && next.isNotEmpty()) Row(Modifier.padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                next.take(5).forEach { (code, day) ->
+                    androidx.compose.material3.Icon(weatherIcon(code, day), weatherLabel(code), tint = Color.White.copy(alpha = .85f),
+                        modifier = Modifier.size(18.dp))
+                }
+            }
+        }
         Text(SimpleDateFormat("MMMM d", Locale.getDefault()).format(date), color = Color.White, fontSize = 40.sp,
             fontWeight = FontWeight.Bold, lineHeight = 44.sp)
     }

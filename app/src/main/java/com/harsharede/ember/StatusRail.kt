@@ -50,6 +50,12 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.rounded.Bluetooth
+import androidx.compose.material.icons.rounded.BluetoothDisabled
+import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material.icons.rounded.AirplanemodeInactive
+import androidx.compose.material.icons.rounded.DoNotDisturbOff
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.LocationOff
 import androidx.compose.material.icons.rounded.DoNotDisturbOn
 import androidx.compose.material.icons.rounded.EnergySavingsLeaf
 import androidx.compose.material.icons.rounded.LocationOn
@@ -109,6 +115,7 @@ fun StatusCapsule(
     modifier: Modifier = Modifier,
     alpha: Float = .8f,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(36.dp),
+    widthDp: Int = 92,
     onOpenNotifications: (String?) -> Unit,
 ) {
     val context = LocalContext.current
@@ -118,34 +125,50 @@ fun StatusCapsule(
         Toast.makeText(context, "${icon.label} hidden. Bring it back in Ember settings.", Toast.LENGTH_SHORT).show()
     }
     fun shown(icon: StatusIcon) = icon.id !in hidden
+    val showOff by EmberApp.instance.prefs.statusShowOff.collectAsStateWithLifecycle()
+    // Everything scales with the rail, so a narrow rail still fits the time.
+    val timeSize = (widthDp * .22f).coerceIn(13f, 20f).sp
+    val iconSize = (widthDp * .22f).coerceIn(15f, 20f).dp
     Column(modifier.glass(shape, alpha).padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = Color.White, fontSize = timeSize, fontWeight = FontWeight.Bold, maxLines = 1)
 
+        // What's on, and (if chosen) what's off, dimmed, so it can be tapped back on.
         val icons = buildList {
-            if (shown(StatusIcon.WIFI) && status.wifi) add(StatusIcon.WIFI to wifiIcon(status.wifiLevel))
-            if (shown(StatusIcon.CELLULAR) && status.cellular && !status.airplane) add(StatusIcon.CELLULAR to cellIcon(status.cellLevel))
-            if (shown(StatusIcon.VPN) && status.vpn) add(StatusIcon.VPN to Icons.Rounded.VpnKey)
-            if (shown(StatusIcon.BLUETOOTH) && status.bluetooth) add(StatusIcon.BLUETOOTH to Icons.Rounded.Bluetooth)
-            if (shown(StatusIcon.AIRPLANE) && status.airplane) add(StatusIcon.AIRPLANE to Icons.Rounded.AirplanemodeActive)
-            if (shown(StatusIcon.DND) && status.dnd) add(StatusIcon.DND to Icons.Rounded.DoNotDisturbOn)
-            if (shown(StatusIcon.RINGER) && (status.silent || status.vibrate))
-                add(StatusIcon.RINGER to if (status.silent) Icons.Rounded.NotificationsOff else Icons.Rounded.Vibration)
-            if (shown(StatusIcon.LOCATION) && status.location) add(StatusIcon.LOCATION to Icons.Rounded.LocationOn)
-            if (shown(StatusIcon.POWER_SAVE) && status.powerSave) add(StatusIcon.POWER_SAVE to Icons.Rounded.EnergySavingsLeaf)
+            fun put(id: StatusIcon, on: Boolean, onIcon: ImageVector, offIcon: ImageVector?) {
+                if (!shown(id)) return
+                if (on) add(Triple(id, onIcon, true)) else if (showOff && offIcon != null) add(Triple(id, offIcon, false))
+            }
+            put(StatusIcon.WIFI, status.wifi, wifiIcon(status.wifiLevel), Icons.Rounded.WifiOff)
+            put(StatusIcon.CELLULAR, status.cellular && !status.airplane, cellIcon(status.cellLevel), null)
+            put(StatusIcon.VPN, status.vpn, Icons.Rounded.VpnKey, null)
+            put(StatusIcon.BLUETOOTH, status.bluetooth, Icons.Rounded.Bluetooth, Icons.Rounded.BluetoothDisabled)
+            put(StatusIcon.AIRPLANE, status.airplane, Icons.Rounded.AirplanemodeActive, Icons.Rounded.AirplanemodeInactive)
+            put(StatusIcon.DND, status.dnd, Icons.Rounded.DoNotDisturbOn, Icons.Rounded.DoNotDisturbOff)
+            put(StatusIcon.RINGER, status.silent || status.vibrate, if (status.silent) Icons.Rounded.NotificationsOff else Icons.Rounded.Vibration,
+                Icons.Rounded.NotificationsActive)
+            put(StatusIcon.LOCATION, status.location, Icons.Rounded.LocationOn, Icons.Rounded.LocationOff)
+            put(StatusIcon.POWER_SAVE, status.powerSave, Icons.Rounded.EnergySavingsLeaf, null)
         }
-        // Two to a row keeps the capsule narrow however many things are on.
+        // Two to a row keeps the capsule narrow however many things are on. Tap: its quick control; hold: its settings.
         icons.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                row.forEach { (id, vector) ->
+                row.forEach { (id, vector, on) ->
                     SwipeAway(onGone = { hide(id) }) {
-                        Icon(vector, id.label, tint = if (id == StatusIcon.DND || id == StatusIcon.RINGER) EmberColors.Ember else Color.White,
-                            modifier = Modifier.size(20.dp))
+                        Box(Modifier.clip(CircleShape).combinedClickable(onLongClick = { StatusActions.longPress(context, id) },
+                            onClick = { StatusActions.tap(context, id, status) }).padding(3.dp)) {
+                            Icon(vector, id.label, modifier = Modifier.size(iconSize),
+                                tint = (if (on && (id == StatusIcon.DND || id == StatusIcon.RINGER)) EmberColors.Ember else Color.White)
+                                    .copy(alpha = if (on) 1f else .4f))
+                        }
                     }
                 }
             }
         }
-        if (shown(StatusIcon.BATTERY)) SwipeAway(onGone = { hide(StatusIcon.BATTERY) }) { BatteryRing(status) }
+        if (shown(StatusIcon.BATTERY)) SwipeAway(onGone = { hide(StatusIcon.BATTERY) }) {
+            Box(Modifier.clip(RoundedCornerShape(16.dp)).combinedClickable(onLongClick = { StatusActions.longPress(context, StatusIcon.BATTERY) },
+                onClick = { StatusActions.tap(context, StatusIcon.BATTERY, status) })) { BatteryRing(status, (widthDp * .41f).coerceIn(26f, 38f).dp) }
+        }
 
         if (shown(StatusIcon.NOTIFICATIONS) && notifications.isNotEmpty()) SwipeAway(onGone = { hide(StatusIcon.NOTIFICATIONS) }) {
             Row(Modifier.clip(RoundedCornerShape(50)).background(EmberColors.Ember.copy(alpha = .9f))
@@ -190,7 +213,7 @@ private fun SwipeAway(onGone: () -> Unit, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun BatteryRing(status: DeviceStatus) {
+private fun BatteryRing(status: DeviceStatus, ring: Dp = 38.dp) {
     val color = when {
         status.charging -> Color(0xFF34C759)
         status.battery <= 15 -> EmberColors.Red
@@ -198,7 +221,7 @@ private fun BatteryRing(status: DeviceStatus) {
         else -> Color.White
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Canvas(Modifier.size(38.dp)) {
+        Canvas(Modifier.size(ring)) {
             val stroke = 4.dp.toPx()
             val inset = stroke / 2
             val arcSize = Size(size.width - stroke, size.height - stroke)

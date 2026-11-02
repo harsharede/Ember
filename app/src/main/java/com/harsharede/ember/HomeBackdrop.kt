@@ -130,6 +130,15 @@ fun WeatherEffects() {
                     center = Offset(size.width * .85f, size.height * .06f), radius = size.width * .8f),
                     radius = size.width * .8f, center = Offset(size.width * .85f, size.height * .06f))
             }
+            WeatherKind.CLOUDS -> for (i in 0 until 4) {
+                // Big soft clouds drifting slowly across.
+                val speed = .012f + i * .004f
+                val x = ((drops[i][0] + t * speed) % 1.4f - .2f) * size.width
+                val y = size.height * (.08f + .12f * i)
+                val r = size.width * (.35f + .1f * (i % 2))
+                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = if (w.isDay) .10f else .06f), Color.Transparent), center = Offset(x, y), radius = r),
+                    radius = r, center = Offset(x, y))
+            }
             WeatherKind.STARS -> drops.take(30).forEachIndexed { i, (x0, y0, speed) ->
                 val twinkle = .25f + .35f * ((sin((t * speed * 2f + i).toDouble()).toFloat() + 1f) / 2f)
                 drawCircle(Color.White.copy(alpha = twinkle), radius = 1.6f + speed, center = Offset(x0 * size.width, y0 * size.height * .55f))
@@ -139,11 +148,12 @@ fun WeatherEffects() {
     }
 }
 
-enum class WeatherKind { NONE, RAIN, STORM, SNOW, FOG, SUN, STARS }
+enum class WeatherKind { NONE, RAIN, STORM, SNOW, FOG, SUN, STARS, CLOUDS }
 
-/** Which effect suits a WMO weather code; cloudy skies get none, so Home isn't busy for nothing. */
+/** Which effect suits a WMO weather code. */
 fun weatherKind(code: Int, day: Boolean): WeatherKind = when (code) {
     0, 1 -> if (day) WeatherKind.SUN else WeatherKind.STARS
+    2, 3 -> WeatherKind.CLOUDS
     45, 48 -> WeatherKind.FOG
     51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82 -> WeatherKind.RAIN
     71, 73, 75, 77, 85, 86 -> WeatherKind.SNOW

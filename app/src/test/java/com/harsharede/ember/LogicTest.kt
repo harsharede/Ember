@@ -188,6 +188,7 @@ class LogicTest {
 
     @Test fun `weather effects match the forecast`() {
         assertEquals(WeatherKind.RAIN, weatherKind(63, true)); assertEquals(WeatherKind.STARS, weatherKind(0, false))
-        assertEquals(WeatherKind.NONE, weatherKind(3, true)); assertEquals(WeatherKind.STORM, weatherKind(95, true))
+        assertEquals(WeatherKind.CLOUDS, weatherKind(3, true)); assertEquals(WeatherKind.STORM, weatherKind(95, true))
+        assertEquals(WeatherKind.NONE, weatherKind(42, true))
     }
 }

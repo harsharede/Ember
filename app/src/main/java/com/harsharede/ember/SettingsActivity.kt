@@ -275,7 +275,10 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 Group("Status icons") {
-                    Text("Swipe an icon sideways on the rail to hide it, or switch it here.", color = EmberColors.Secondary,
+                    val showOff by prefs.statusShowOff.collectAsStateWithLifecycle()
+                    Toggle("Show switched-off icons, dimmed", "So Wi-Fi, Bluetooth, location and the like can be tapped back on", showOff) { prefs.setStatusShowOff(it) }
+                    Text("Tap an icon for its quick control (Wi-Fi and mobile open Android's internet panel; Do Not Disturb and the ringer change straight away), " +
+                        "hold it for its settings page. Swipe an icon sideways on the rail to hide it, or switch it here.", color = EmberColors.Secondary,
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     StatusIcon.entries.forEach { icon ->
                         Toggle(icon.label, null, icon.id !in hidden) { on -> if (on) prefs.showStatus(icon.id) else prefs.hideStatus(icon.id) }

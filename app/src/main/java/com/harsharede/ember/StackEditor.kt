@@ -214,7 +214,7 @@ private fun Toggle(title: String, detail: String, icon: ImageVector?, on: Boolea
 
 /** Weather for where you are (asks for location) or for a city you search (no location needed). */
 @Composable
-private fun WeatherPlaceDialog(onLocation: () -> Unit, onCity: (Triple<String, Double, Double>) -> Unit, onDismiss: () -> Unit) {
+fun WeatherPlaceDialog(onLocation: () -> Unit, onCity: (Triple<String, Double, Double>) -> Unit, onDismiss: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf(emptyList<Triple<String, Double, Double>>()) }
     LaunchedEffect(query) { delay(350); results = WeatherStore.searchCity(query) }
