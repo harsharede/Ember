@@ -34,6 +34,9 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -91,6 +94,10 @@ class SettingsActivity : ComponentActivity() {
         val wallpaper by prefs.wallpaperColors.collectAsStateWithLifecycle()
         val keyboard by prefs.drawerKeyboard.collectAsStateWithLifecycle()
         val persistent by prefs.showPersistent.collectAsStateWithLifecycle()
+        val light by prefs.lightEnabled.collectAsStateWithLifecycle()
+        val lightMinutes by prefs.lightMinutes.collectAsStateWithLifecycle()
+        val lightIcon by prefs.lightIcon.collectAsStateWithLifecycle()
+        val lightBrightness by prefs.lightBrightness.collectAsStateWithLifecycle()
         val isHome = getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
         val hasAccess = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
         val canOverlay = Settings.canDrawOverlays(this)
@@ -122,6 +129,18 @@ class SettingsActivity : ComponentActivity() {
                     Row_("Open App info") { open(appInfo()) }
                 }
 
+                Group("Lock screen light") {
+                    Toggle("Notification light", "When something arrives with the screen off, the screen wakes black with only a " +
+                        "glowing pill at the top left. Tap to see the lock screen, swipe up to unlock into your notifications.", light) { prefs.setLight(it) }
+                    if (light) {
+                        Choice("Keep glowing for", listOf(15 to "15 min", 30 to "30 min", 60 to "1 hour", 180 to "3 hours"), lightMinutes) { prefs.setLightMinutes(it) }
+                        Choice("Brightness", listOf(0 to "Low", 1 to "Medium", 2 to "High"), lightBrightness) { prefs.setLightBrightness(it) }
+                        Toggle("Show app icons in the light", "Off: just a coloured light, nothing to read from across the room", lightIcon) { prefs.setLightIcon(it) }
+                        if (!canOverlay) Text("Needs \"Display over other apps\" (above) to wake the screen.", color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
+                    }
+                }
+
                 Group("Look") {
                     Toggle("Colours from wallpaper", "Material You: the accent and surfaces follow your wallpaper", wallpaper) { prefs.setWallpaperColors(it) }
                     Toggle("Hide Android's status bar on Home", "The rail shows the same things", hideBar) { prefs.setHideStatusBar(it) }
@@ -132,7 +151,7 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 Group("Notifications") {
-                    Toggle("Notification pill", "A light glows at the top left instead of a banner", pill) { prefs.setPill(it) }
+                    Toggle("Pill while using the phone", "A light glows at the top left when something arrives", pill) { prefs.setPill(it) }
                     Toggle("Show ones that can't be dismissed", "System and \"always on\" notices, in their own folded section", persistent) { prefs.setShowPersistent(it) }
                     Text("So Android's own banners don't cover the screen as well: Notifications › Notification pop-up style, and turn pop-ups off.",
                         color = EmberColors.Secondary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
@@ -193,6 +212,19 @@ class SettingsActivity : ComponentActivity() {
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             modifier = Modifier.fillMaxWidth().clickableRow { onChange(!on) },
         )
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    private fun Choice(title: String, options: List<Pair<Int, String>>, selected: Int, onPick: (Int) -> Unit) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 8.dp))
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                options.forEachIndexed { i, (value, label) ->
+                    SegmentedButton(selected == value, { onPick(value) }, SegmentedButtonDefaults.itemShape(i, options.size)) { Text(label, maxLines = 1) }
+                }
+            }
+        }
     }
 
     @Composable

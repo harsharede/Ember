@@ -71,11 +71,15 @@ class LogicTest {
     }
 
     @Test fun `apps fall into sensible groups`() {
-        val user = android.os.UserHandle(null as android.os.Parcel?)
-        fun app(pkg: String, category: Int = -1) = AppEntry(pkg, pkg, ComponentName(pkg, "A"), user, work = false, category = category)
-        assertEquals(AppGroup.MESSAGING, groupOf(app("com.whatsapp", android.content.pm.ApplicationInfo.CATEGORY_SOCIAL)))
-        assertEquals(AppGroup.GAMES, groupOf(app("com.example.puzzle", android.content.pm.ApplicationInfo.CATEGORY_GAME)))
-        assertEquals(AppGroup.PRODUCTIVITY, groupOf(app("com.microsoft.teams")))
-        assertEquals(AppGroup.OTHER, groupOf(app("com.example.unknown")))
+        assertEquals(AppGroup.MESSAGING, groupFor("com.whatsapp", android.content.pm.ApplicationInfo.CATEGORY_SOCIAL))
+        assertEquals(AppGroup.GAMES, groupFor("com.example.puzzle", android.content.pm.ApplicationInfo.CATEGORY_GAME))
+        assertEquals(AppGroup.PRODUCTIVITY, groupFor("com.microsoft.teams", -1))
+        assertEquals(AppGroup.OTHER, groupFor("com.example.unknown", -1))
+    }
+
+    @Test fun `light keeps a colour that shows on black`() {
+        assertEquals(0xFF2196F3.toInt(), lightColor(0xFF2196F3.toInt(), fallback = 1))
+        assertEquals(1, lightColor(0xFF101010.toInt(), fallback = 1))  // too dark to see
+        assertEquals(1, lightColor(0, fallback = 1))                    // app set none
     }
 }

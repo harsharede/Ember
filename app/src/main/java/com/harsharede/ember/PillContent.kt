@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -67,7 +68,7 @@ internal fun PillContent(overlay: PillOverlay) {
 private fun PillLight(overlay: PillOverlay) {
     val newest = overlay.pending.firstOrNull() ?: return
     // The app's own notification color when it set one, otherwise Ember's.
-    val glow = if (newest.color != 0) Color(newest.color).copy(alpha = 1f) else EmberColors.Ember
+    val glow = Color(lightColor(newest.color, EmberColors.Ember.toArgb()))
     val pulse by rememberInfiniteTransition(label = "glow").animateFloat(.35f, 1f,
         infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse")
     val density = LocalDensity.current

@@ -21,6 +21,7 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent { EmberTheme { HomeScreen(requests, onAddWidget = { info -> Widgets.add(this, info) }) } }
+        if (intent?.action == ACTION_OPEN_NOTIFICATIONS) requests.openNotifications++
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 EmberApp.instance.prefs.hideStatusBar.collect { hide -> applyStatusBar(hide) }
@@ -56,13 +57,18 @@ class HomeActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // The Home button while already home: back to the plain Home screen.
-        if (intent.action == Intent.ACTION_MAIN) requests.closeAll++
+        when (intent.action) {
+            ACTION_OPEN_NOTIFICATIONS -> requests.openNotifications++
+            Intent.ACTION_MAIN -> requests.closeAll++
+        }
     }
 
     override fun onResume() { super.onResume(); resumed = true }
     override fun onPause() { super.onPause(); resumed = false }
 
     companion object {
+        const val ACTION_OPEN_NOTIFICATIONS = "com.harsharede.ember.OPEN_NOTIFICATIONS"
+
         /** True while Home is in front, so the pill stays out (the rail already shows new notifications). */
         @Volatile var resumed = false
             private set

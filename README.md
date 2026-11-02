@@ -16,6 +16,10 @@ banners.
   Older. Reply right there when the app allows it, or tap **Remind me** for 3, 5, 15 or 30 minutes or an hour. Swipe a
   card away to dismiss it. Push up past the end to close. Silent notifications and ones that can't be dismissed
   are folded into their own sections, and the latter have a Turn off button that opens that channel's settings.
+- **The lock-screen light.** When something arrives with the screen off, the screen wakes black at the lowest
+  brightness and only a small pill glows at the top left, blinking slowly like an old notification LED. Tap to see the
+  lock screen, swipe up to unlock into the notification page. It goes dark when the notifications are dealt with, after
+  the time you choose, or when you unlock; in a pocket the proximity sensor keeps the screen off. Do Not Disturb is respected.
 - **The pill.** When a notification arrives while you're using the phone, a small pill glows at the top left, like an
   old phone's notification light, instead of a banner over what you're doing. Tap it or pull it down to read, reply or
   snooze in a pop-up; flick it sideways to put it out.
@@ -42,6 +46,7 @@ Ember has no internet permission. Notifications, app usage and settings never le
 | Query all packages | Listing your apps (every launcher needs this) |
 | Network state | The Wi-Fi, mobile and VPN icons |
 | Request delete packages | Uninstall from the drawer; Android always asks first |
+| Wake lock, turn screen on | The lock-screen light: waking the screen, keeping it on while it glows, the pocket sensor |
 
 ## Building
 

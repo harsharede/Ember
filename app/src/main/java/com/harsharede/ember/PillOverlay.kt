@@ -50,7 +50,7 @@ class PillOverlay(private val context: Context) {
 
     private val screenReceiver = object : BroadcastReceiver() {
         // Something arrived with the screen off: the pill is waiting when the phone is unlocked.
-        override fun onReceive(c: Context, intent: Intent) { if (pending.isNotEmpty()) show() }
+        override fun onReceive(c: Context, intent: Intent) { if (pending.isNotEmpty() && !HomeActivity.resumed) show() }
     }
 
     fun start() {
@@ -61,7 +61,7 @@ class PillOverlay(private val context: Context) {
                 pending.removeAll { it.key == item.key }
                 pending.add(0, item)
                 // On Ember's own Home the rail already shows it; elsewhere the pill lights up.
-                if (power.isInteractive && !HomeActivity.resumed) show()
+                if (power.isInteractive && !HomeActivity.resumed && !Light.showing) show()
             }
         }
         scope.launch {

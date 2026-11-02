@@ -11,4 +11,12 @@
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>
+    <!-- The lock-screen light: pure black, no window animations, nothing drawn but the pill. -->
+    <style name="Theme.Ember.Light">
+        <item name="android:windowBackground">@color/ember_black</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+    </style>
 </resources>

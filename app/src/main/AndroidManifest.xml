@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Uninstall from the app drawer; Android always asks first. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- The lock-screen light: keep the screen on while it glows, and let the proximity sensor switch it off in a pocket. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Android 14+: lets the light wake the screen when a notification arrives. -->
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
 
     <application
         android:name=".EmberApp"
@@ -48,6 +52,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".LightActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="com.harsharede.ember.light"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.Ember.Light" />
 
         <service
             android:name=".EmberNotificationListener"

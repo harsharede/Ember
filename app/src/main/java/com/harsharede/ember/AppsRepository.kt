@@ -173,8 +173,10 @@ private val PACKAGE_HINTS: List<Pair<String, AppGroup>> = listOf(
     "browser" to AppGroup.UTILITIES, "vpn" to AppGroup.UTILITIES, "authenticator" to AppGroup.UTILITIES, "phone" to AppGroup.UTILITIES,
 )
 
-fun groupOf(app: AppEntry): AppGroup {
-    val byCategory = when (app.category) {
+fun groupOf(app: AppEntry): AppGroup = groupFor(app.packageName, app.category)
+
+fun groupFor(packageName: String, category: Int): AppGroup {
+    val byCategory = when (category) {
         android.content.pm.ApplicationInfo.CATEGORY_GAME -> AppGroup.GAMES
         android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> AppGroup.MUSIC
         android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> AppGroup.ENTERTAINMENT
@@ -187,7 +189,7 @@ fun groupOf(app: AppEntry): AppGroup {
         else -> null
     }
     // A name hint wins over a vague category: chat apps often call themselves "social".
-    val pkg = app.packageName.lowercase()
+    val pkg = packageName.lowercase()
     val hint = PACKAGE_HINTS.firstOrNull { pkg.contains(it.first) }?.second
     return when {
         hint == AppGroup.MESSAGING -> hint

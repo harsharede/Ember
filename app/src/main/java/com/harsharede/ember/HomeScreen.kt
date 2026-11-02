@@ -72,6 +72,8 @@ import java.util.Locale
 class HomeRequests {
     var closeAll by mutableIntStateOf(0)
     var pickWidget by mutableStateOf(false)
+    /** Open the notification page (from the lock-screen light's swipe up). */
+    var openNotifications by mutableIntStateOf(0)
 }
 
 @Composable
@@ -110,7 +112,8 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
         val slot = dockKeys.indexOfFirst { it.isEmpty() }.takeIf { it >= 0 } ?: (Prefs.DOCK_SLOTS - 1)
         app.prefs.setDockSlot(slot, entry.key)
     }
-    LaunchedEffect(requests.closeAll) { drawer.hide(); notes.hide(); pickDockSlot = null; editing = false; requests.pickWidget = false }
+    LaunchedEffect(requests.openNotifications) { if (requests.openNotifications > 0) { drawer.hide(); notificationFilter = null; notes.show() } }
+    LaunchedEffect(requests.closeAll) { if (requests.closeAll == 0) return@LaunchedEffect; drawer.hide(); notes.hide(); pickDockSlot = null; editing = false; requests.pickWidget = false }
 
     BackHandler(drawerShown || notesShown || pickDockSlot != null || editing || requests.pickWidget) {
         when {

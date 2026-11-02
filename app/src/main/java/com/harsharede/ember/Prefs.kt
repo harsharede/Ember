@@ -53,6 +53,24 @@ class Prefs(context: Context) {
 
     data class HomeWidget(val id: Int, val heightDp: Int)
 
+    private val _light = MutableStateFlow(sp.getBoolean(KEY_LIGHT, true))
+    /** The lock-screen light: wake the screen black with a glowing pill when something arrives with the screen off. */
+    val lightEnabled: StateFlow<Boolean> = _light.asStateFlow()
+    private val _lightMinutes = MutableStateFlow(sp.getInt(KEY_LIGHT_MINUTES, 60))
+    /** How long the light keeps glowing before it lets the screen go off. */
+    val lightMinutes: StateFlow<Int> = _lightMinutes.asStateFlow()
+    private val _lightIcon = MutableStateFlow(sp.getBoolean(KEY_LIGHT_ICON, true))
+    /** Show the apps' icons inside the light (off: just a coloured light). */
+    val lightIcon: StateFlow<Boolean> = _lightIcon.asStateFlow()
+    private val _lightBrightness = MutableStateFlow(sp.getInt(KEY_LIGHT_BRIGHTNESS, 0))
+    /** 0 low, 1 medium, 2 high. */
+    val lightBrightness: StateFlow<Int> = _lightBrightness.asStateFlow()
+
+    fun setLight(on: Boolean) { _light.value = on; sp.edit().putBoolean(KEY_LIGHT, on).apply() }
+    fun setLightMinutes(m: Int) { _lightMinutes.value = m; sp.edit().putInt(KEY_LIGHT_MINUTES, m).apply() }
+    fun setLightIcon(on: Boolean) { _lightIcon.value = on; sp.edit().putBoolean(KEY_LIGHT_ICON, on).apply() }
+    fun setLightBrightness(level: Int) { _lightBrightness.value = level; sp.edit().putInt(KEY_LIGHT_BRIGHTNESS, level).apply() }
+
     fun setWallpaperColors(on: Boolean) { _wallpaperColors.value = on; sp.edit().putBoolean(KEY_WALLPAPER_COLORS, on).apply() }
     fun setDrawerKeyboard(on: Boolean) { _drawerKeyboard.value = on; sp.edit().putBoolean(KEY_DRAWER_KEYBOARD, on).apply() }
     fun setDrawerTab(tab: Int) { if (_drawerTab.value != tab) { _drawerTab.value = tab; sp.edit().putInt(KEY_DRAWER_TAB, tab).apply() } }
@@ -131,6 +149,10 @@ class Prefs(context: Context) {
         private const val KEY_DRAWER_TAB = "drawer_tab"
         private const val KEY_PERSISTENT = "show_persistent"
         private const val KEY_WIDGETS = "widgets"
+        private const val KEY_LIGHT = "light"
+        private const val KEY_LIGHT_MINUTES = "light_minutes"
+        private const val KEY_LIGHT_ICON = "light_icon"
+        private const val KEY_LIGHT_BRIGHTNESS = "light_brightness"
         private const val SEP = "\n"
         private const val FIELD = "\t"
     }

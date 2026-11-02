@@ -2,6 +2,7 @@ package com.harsharede.ember
 
 import android.app.Notification
 import android.app.NotificationManager
+import android.os.PowerManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
@@ -31,10 +32,15 @@ class EmberNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
-        val item = sbn.toItem(packageName, EmberApp.instance.apps::labelForPackage, rankingFor(sbn.key, rankingMap))
+        val ranking = rankingFor(sbn.key, rankingMap)
+        val item = sbn.toItem(packageName, EmberApp.instance.apps::labelForPackage, ranking)
         if (item == null) { NotificationStore.remove(sbn.key); return }
         val existing = NotificationStore.items.value.firstOrNull { it.key == item.key }
-        NotificationStore.upsert(item, alerts = !item.silent && !item.persistent && alerts(sbn, existing, rankingMap))
+        val alerting = !item.silent && !item.persistent && alerts(sbn, existing, rankingMap)
+        NotificationStore.upsert(item, alerts = alerting)
+        // Screen off (or the light already on): the lock-screen light, unless Do Not Disturb is holding this one back.
+        if (alerting && EmberApp.instance.prefs.lightEnabled.value && ranking?.matchesInterruptionFilter() != false &&
+            (Light.showing || !getSystemService(PowerManager::class.java).isInteractive)) Light.show(this, item)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap?) {
