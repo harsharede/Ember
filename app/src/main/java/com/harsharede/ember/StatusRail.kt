@@ -70,7 +70,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * The right-hand status capsule, standing in for Android's status bar: time, date, and an icon for each thing that's
+ * The right-hand status capsule, standing in for Android's status bar: the time, and an icon for each thing that's
  * on. Swipe an icon sideways to hide it (Settings brings it back). The notification count opens to show which apps.
  */
 @Composable
@@ -92,7 +92,6 @@ fun StatusCapsule(
     Column(modifier.glass(RoundedCornerShape(36.dp)).padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text(SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(now)), color = EmberColors.Secondary, fontSize = 13.sp)
 
         val icons = buildList {
             if (shown(StatusIcon.WIFI) && status.wifi) add(StatusIcon.WIFI to wifiIcon(status.wifiLevel))

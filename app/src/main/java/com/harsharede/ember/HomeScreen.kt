@@ -239,13 +239,13 @@ private fun SuggestionsCard(apps: List<AppEntry>, loading: Boolean, onLaunch: (A
         Spacer(Modifier.height(14.dp))
         if (apps.isEmpty()) Text(if (loading) "Loading…" else "Apps you open often will show up here. Swipe up for all apps.",
             color = EmberColors.Secondary, fontSize = 14.sp)
-        else Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             apps.forEach { entry ->
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onLaunch(entry) }.padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     AppIcon(entry, 54.dp)
-                    Text(entry.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 6.dp))
+                    Text(entry.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
                 }
             }
             repeat(4 - apps.size) { Spacer(Modifier.weight(1f)) }
@@ -253,13 +253,13 @@ private fun SuggestionsCard(apps: List<AppEntry>, loading: Boolean, onLaunch: (A
     }
 }
 
+/** The time, large. The day and date are already in the header, so the card doesn't repeat them. */
 @Composable
 private fun ClockCard(now: Long) {
-    val date = Date(now)
-    Column(Modifier.size(150.dp).glass().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
+    Column(Modifier.width(150.dp).glass().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("LOCAL TIME", color = EmberColors.Secondary, style = MaterialTheme.typography.labelMedium)
-        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(date), color = MaterialTheme.colorScheme.onSurface, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-        Text(SimpleDateFormat("EEE", Locale.getDefault()).format(date), color = EmberColors.Secondary, fontSize = 14.sp)
+        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 36.sp, fontWeight = FontWeight.Bold)
     }
 }
 
