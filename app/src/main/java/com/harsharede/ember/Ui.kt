@@ -75,9 +75,12 @@ fun EmberTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = scheme, content = content)
 }
 
+/** How solid glass surfaces are; Home sets it from "Card transparency". */
+val LocalGlassAlpha = androidx.compose.runtime.compositionLocalOf { .80f }
+
 /** Ember's glass: the scheme's raised surface, a soft top sheen and a lit hairline edge. */
 @Composable
-fun Modifier.glass(shape: Shape = RoundedCornerShape(28.dp), alpha: Float = .80f): Modifier {
+fun Modifier.glass(shape: Shape = RoundedCornerShape(28.dp), alpha: Float = LocalGlassAlpha.current): Modifier {
     val fill = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = alpha)
     return this
         .clip(shape)

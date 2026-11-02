@@ -22,7 +22,7 @@ class HomeActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             EmberTheme {
-                HomeScreen(requests, onAddWidget = { info, target -> Widgets.add(this, info, target) },
+                HomeScreen(requests, onAddWidget = { info, target, page -> Widgets.add(this, info, target, page) },
                     onAutoPick = { SmartStack.autoPick(this, lifecycleScope) })
             }
         }

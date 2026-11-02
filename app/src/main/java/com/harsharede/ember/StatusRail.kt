@@ -29,6 +29,11 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -99,6 +104,7 @@ fun StatusCapsule(
     notifications: List<NotifItem>,
     hidden: Set<String>,
     modifier: Modifier = Modifier,
+    alpha: Float = .8f,
     onOpenNotifications: (String?) -> Unit,
 ) {
     val context = LocalContext.current
@@ -108,7 +114,7 @@ fun StatusCapsule(
         Toast.makeText(context, "${icon.label} hidden. Bring it back in Ember settings.", Toast.LENGTH_SHORT).show()
     }
     fun shown(icon: StatusIcon) = icon.id !in hidden
-    Column(modifier.glass(RoundedCornerShape(36.dp)).padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    Column(modifier.glass(RoundedCornerShape(36.dp), alpha).padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
@@ -218,17 +224,18 @@ private fun cellIcon(level: Int): ImageVector = when {
  * scrolls, with a small arrow saying there's more. Tap to open; hold for change, move or remove; + adds one.
  */
 @Composable
-fun DockColumn(apps: List<AppEntry>, modifier: Modifier = Modifier, onLaunch: (AppEntry) -> Unit, onChoose: (Int) -> Unit) {
+fun DockColumn(apps: List<AppEntry>, modifier: Modifier = Modifier, iconSize: Dp = 52.dp, alpha: Float = .8f,
+               onLaunch: (AppEntry) -> Unit, onChoose: (Int) -> Unit) {
     val prefs = EmberApp.instance.prefs
     val scroll = rememberScrollState()
-    Box(modifier.glass(RoundedCornerShape(36.dp))) {
+    Box(modifier.glass(RoundedCornerShape(36.dp), alpha)) {
         Column(Modifier.verticalScroll(scroll).padding(vertical = 12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             apps.forEachIndexed { index, app ->
                 var menu by remember { mutableStateOf(false) }
                 Box {
                     Box(Modifier.clip(CircleShape).combinedClickable(onLongClick = { menu = true }, onClick = { onLaunch(app) }).padding(2.dp)) {
-                        AppIcon(app, 52.dp)
+                        AppIcon(app, iconSize)
                     }
                     DropdownMenu(menu, { menu = false }) {
                         DropdownMenuItem({ Text("Change app") }, { menu = false; onChoose(index) })
@@ -238,7 +245,7 @@ fun DockColumn(apps: List<AppEntry>, modifier: Modifier = Modifier, onLaunch: (A
                     }
                 }
             }
-            Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = .06f)).clickable { onChoose(apps.size) },
+            Box(Modifier.size(iconSize * .8f).clip(CircleShape).background(Color.White.copy(alpha = .06f)).clickable { onChoose(apps.size) },
                 contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Add, "Add an app to the dock", tint = EmberColors.Secondary)
             }
@@ -257,23 +264,25 @@ private fun MoreArrow(icon: ImageVector, modifier: Modifier) {
 }
 
 /**
- * The wallpaper buttons as a small dock under the apps: where and when the photo was taken (scrolling past, a couple
- * of times after each new photo and each return to Home, then still), then like, new photo and dislike.
+ * The wallpaper control, tiny, in a corner: a small round button. Tap it and it opens into a bar with where and when
+ * the photo was taken (scrolling past), like, new photo and dislike; it folds away again after a few seconds.
  */
 @Composable
-fun WallpaperDock(modifier: Modifier = Modifier) {
+fun WallpaperMini(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val current by Wallpapers.current.collectAsStateWithLifecycle()
     val changing by Wallpapers.changing.collectAsStateWithLifecycle()
     val liked = current?.liked == true
+    var open by remember { mutableStateOf(false) }
+    var touched by remember { mutableIntStateOf(0) }
     var hasPlaceAccess by remember { mutableStateOf(Wallpapers.hasPlaceAccess(context)) }
     val placeAccess = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
         hasPlaceAccess = ok
         if (ok) Wallpapers.lookUpPlace(context)
     }
-    var shown by remember { mutableIntStateOf(0) }
-    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { shown++ }
+    // Folds away by itself a few seconds after the last touch.
+    LaunchedEffect(open, touched, changing) { if (open && !changing) { kotlinx.coroutines.delay(6_000); open = false } }
     val line = remember(current, changing, hasPlaceAccess) {
         val c = current
         val date = c?.takenAt?.takeIf { it > 0 }?.let { SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(it)) }
@@ -285,33 +294,42 @@ fun WallpaperDock(modifier: Modifier = Modifier) {
             else -> date ?: "From your photos"
         }
     }
-    Column(modifier.glass(RoundedCornerShape(36.dp)).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).clickable {
-            val c = current
-            when {
-                c != null && c.place == null && !hasPlaceAccess -> placeAccess.launch(android.Manifest.permission.ACCESS_MEDIA_LOCATION)
-                c != null -> runCatching {
-                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(c.uri, "image/*")
-                        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    val small = 30.dp
+    Row(modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .55f))
+        .animateContentSize(), verticalAlignment = Alignment.CenterVertically) {
+        if (!open) {
+            Box(Modifier.size(small).clickable { open = true; touched++ }, contentAlignment = Alignment.Center) {
+                if (changing) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp)
+                else Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.Image, "Wallpaper", Modifier.size(15.dp),
+                    tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = .8f))
+            }
+        } else {
+            Row(Modifier.widthIn(max = 150.dp).clickable {
+                touched++
+                val c = current
+                when {
+                    c != null && c.place == null && !hasPlaceAccess -> placeAccess.launch(android.Manifest.permission.ACCESS_MEDIA_LOCATION)
+                    c != null -> runCatching {
+                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(c.uri, "image/*")
+                            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
                 }
+            }.padding(start = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Place, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
+                Text(line, fontSize = 11.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 3.dp).basicMarquee(iterations = 2, repeatDelayMillis = 1200, initialDelayMillis = 600))
             }
-        }.padding(start = 10.dp, end = 6.dp, top = 10.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Place, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
-            key(line, shown) {
-                Text(line, fontSize = 12.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = 3.dp).basicMarquee(iterations = 2, repeatDelayMillis = 1500, initialDelayMillis = 800))
-            }
+            MiniButton(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Liked" else "Like this wallpaper",
+                enabled = current != null && !changing, tint = if (liked) MaterialTheme.colorScheme.primary else null) { touched++; Wallpapers.like() }
+            MiniButton(Icons.Rounded.Refresh, "New wallpaper", enabled = !changing) { touched++; Wallpapers.changeNow(context) }
+            MiniButton(Icons.Rounded.ThumbDown, "Don't show this photo again", enabled = !changing) { touched++; Wallpapers.dislike(context) }
         }
-        IconButton({ Wallpapers.like() }, enabled = current != null && !changing) {
-            Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Liked" else "Like this wallpaper",
-                tint = if (liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        IconButton({ Wallpapers.changeNow(context) }, enabled = !changing) {
-            if (changing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Rounded.Refresh, "New wallpaper", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        IconButton({ Wallpapers.dislike(context) }, enabled = !changing) {
-            Icon(Icons.Rounded.ThumbDown, "Don't show this photo again", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+    }
+}
+
+@Composable
+private fun MiniButton(icon: ImageVector, label: String, enabled: Boolean, tint: Color? = null, onClick: () -> Unit) {
+    Box(Modifier.size(30.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, label, Modifier.size(16.dp), tint = (tint ?: MaterialTheme.colorScheme.onSurface).copy(alpha = if (enabled) .9f else .35f))
     }
 }

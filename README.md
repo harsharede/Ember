@@ -18,8 +18,10 @@ banners.
   Bluetooth, airplane mode, Do Not Disturb, silent/vibrate, location, power saving and battery. Swipe any icon sideways
   to hide it; Settings brings it back. The orange notification count opens to show which apps have notifications.
   Below it, the dock: as many apps as you like, filling the room left (it scrolls, with an arrow, when the capsule above
-  grows). Hold an app to change, move or remove it. At the bottom, the wallpaper strip: where and when the photo was taken (scrolling past; tap to open the photo), then
-  ♥, new photo, 👎.
+  grows). Hold an app to change, move or remove it. - **Wallpaper button**: tiny, in the bottom-left corner. Tap it for where and when the photo was taken (scrolling past;
+  tap to open the photo), ♥, new photo and 👎.
+- **Customize look** (hold Home): rail width, dock height, rail and card transparency, live.
+- **Pages**: hold Home › Add page for blank pages to fill with widgets; swipe sideways between them.
 - **Swipe up** for the app drawer: every app A to Z (the keyboard opens so you can type straight away) or, one swipe
   across, the same apps in groups. Pull it down to close.
 - **Widgets**: hold Home › Add widget. Edit Home to move, resize or remove them.

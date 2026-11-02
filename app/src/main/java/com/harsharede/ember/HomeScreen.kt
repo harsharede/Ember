@@ -21,6 +21,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.CompositionLocalProvider
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -83,12 +89,14 @@ class HomeRequests {
     var pickWidget by mutableStateOf(false)
     /** Where the widget being picked goes. */
     var pickTarget by mutableStateOf(Widgets.Target.HOME)
+    /** Which Home page a Home widget goes on. */
+    var pickPage by mutableIntStateOf(0)
     /** Open the notification page (from the lock-screen light's swipe up). */
     var openNotifications by mutableIntStateOf(0)
 }
 
 @Composable
-fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidgetProviderInfo, Widgets.Target) -> Unit, onAutoPick: () -> Unit) {
+fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidgetProviderInfo, Widgets.Target, Int) -> Unit, onAutoPick: () -> Unit) {
     val context = LocalContext.current
     val app = EmberApp.instance
     val apps by app.apps.apps.collectAsStateWithLifecycle()
@@ -100,6 +108,13 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val showWallpaperButtons by app.prefs.wallpaperCard.collectAsStateWithLifecycle()
     val wallpaperCard = rotating && showWallpaperButtons
     var stackEditor by remember { mutableStateOf(false) }
+    var lookSheet by remember { mutableStateOf(false) }
+    val pageCount by app.prefs.pageCount.collectAsStateWithLifecycle()
+    val railWidth by app.prefs.railWidth.collectAsStateWithLifecycle()
+    val dockHeight by app.prefs.dockHeight.collectAsStateWithLifecycle()
+    val railAlpha by app.prefs.railAlpha.collectAsStateWithLifecycle()
+    val cardAlpha by app.prefs.cardAlpha.collectAsStateWithLifecycle()
+    val homePager = rememberPagerState { pageCount }
     val notifications by NotificationStore.items.collectAsStateWithLifecycle()
     val connected by NotificationStore.connected.collectAsStateWithLifecycle()
     val status by rememberDeviceStatus()
@@ -125,16 +140,17 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val launch: (AppEntry) -> Unit = { entry -> app.apps.launch(entry); drawer.hide(); notes.hide() }
     val addToDock: (AppEntry) -> Unit = { entry -> app.prefs.addToDock(entry.key) }
     LaunchedEffect(requests.openNotifications) { if (requests.openNotifications > 0) { drawer.hide(); notificationFilter = null; notes.show() } }
-    LaunchedEffect(requests.closeAll) { if (requests.closeAll == 0) return@LaunchedEffect; drawer.hide(); notes.hide(); pickDockSlot = null; editing = false; requests.pickWidget = false; stackEditor = false }
+    LaunchedEffect(requests.closeAll) { if (requests.closeAll == 0) return@LaunchedEffect; drawer.hide(); notes.hide(); pickDockSlot = null; editing = false; requests.pickWidget = false; stackEditor = false; homePager.animateScrollToPage(0) }
 
-    BackHandler(drawerShown || notesShown || pickDockSlot != null || editing || requests.pickWidget || stackEditor) {
+    BackHandler(drawerShown || notesShown || pickDockSlot != null || editing || requests.pickWidget || stackEditor || homePager.currentPage > 0) {
         when {
             requests.pickWidget -> requests.pickWidget = false
             stackEditor -> stackEditor = false
             pickDockSlot != null -> pickDockSlot = null
             drawerShown -> drawer.hide()
             notesShown -> notes.hide()
-            else -> editing = false
+            editing -> editing = false
+            else -> scope.launch { homePager.animateScrollToPage(0) }
         }
     }
 
@@ -168,34 +184,68 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                 }
             }
             .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = { menu = true }, onClick = {})) {
+            CompositionLocalProvider(LocalGlassAlpha provides cardAlpha) {
             Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 16.dp, end = 10.dp, top = 6.dp)) {
                 BoxWithConstraints(Modifier.weight(1f).padding(end = 12.dp)) {
                     val columnWidth = maxWidth.value.toInt()
-                    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 80.dp)) {
-                        item("date") { DateHeader(now) }
-                        item("stack") {
-                            SmartStackCard(columnWidth, active = !drawerShown && !notesShown && !stackEditor, editing = editing,
-                                suggestions = { SuggestionsCard(suggestions, apps.isEmpty(), launch) },
-                                onEdit = { stackEditor = true })
-                        }
-                        if (!connected) item("access") { AccessCard() }
-                        items(widgets, key = { "w${it.id}" }) { widget -> HomeWidgetView(widget, editing, columnWidth) }
-                        if (editing) item("edit-actions") {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilledTonalButton({ requests.pickTarget = Widgets.Target.HOME; requests.pickWidget = true }) { Text("Add widget") }
-                                FilledTonalButton({ editing = false }) { Text("Done") }
+                    // Swipe sideways for more pages; the rail stays where it is.
+                    HorizontalPager(homePager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, pageSpacing = 24.dp) { page ->
+                        val pageWidgets = widgets.filter { it.page == page || (page == pageCount - 1 && it.page >= pageCount) }
+                        LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 90.dp)) {
+                            if (page == 0) {
+                                item("date") { DateHeader(now) }
+                                item("stack") {
+                                    SmartStackCard(columnWidth, active = !drawerShown && !notesShown && !stackEditor && homePager.currentPage == 0, editing = editing,
+                                        suggestions = { SuggestionsCard(suggestions, apps.isEmpty(), launch) },
+                                        onEdit = { stackEditor = true })
+                                }
+                                if (!connected) item("access") { AccessCard() }
+                            } else if (pageWidgets.isEmpty()) item("empty") {
+                                // A blank page: say what it's for.
+                                Column(Modifier.fillMaxWidth().padding(top = 24.dp).glass().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Page ${page + 1}", style = MaterialTheme.typography.titleMedium)
+                                    Text("A blank page for widgets.", color = EmberColors.Secondary, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+                                    FilledTonalButton({ requests.pickTarget = Widgets.Target.HOME; requests.pickPage = page; requests.pickWidget = true }) { Text("Add widget") }
+                                }
+                            }
+                            items(pageWidgets, key = { "w${it.id}" }) { widget -> HomeWidgetView(widget, editing, columnWidth) }
+                            if (editing) item("edit-actions") {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilledTonalButton({ requests.pickTarget = Widgets.Target.HOME; requests.pickPage = page; requests.pickWidget = true }) { Text("Add widget") }
+                                    if (page > 0) FilledTonalButton({
+                                        app.prefs.removePage(page).forEach { runCatching { Widgets.host.deleteAppWidgetId(it) } }
+                                        scope.launch { homePager.animateScrollToPage((page - 1).coerceAtLeast(0)) }
+                                    }) { Text("Remove page") }
+                                    FilledTonalButton({ editing = false }) { Text("Done") }
+                                }
                             }
                         }
                     }
                 }
-                // The rail: status on top, then the dock taking whatever room is left (it scrolls when that's not enough),
-                // then the wallpaper buttons at the bottom.
-                Column(Modifier.width(92.dp).fillMaxHeight().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth()) { pkg -> notificationFilter = pkg; notes.show() }
-                    DockColumn(dock, Modifier.fillMaxWidth().weight(1f, fill = false), onLaunch = launch, onChoose = { pickDockSlot = it })
-                    if (wallpaperCard) WallpaperDock(Modifier.fillMaxWidth())
+                // The rail: status on top, then the dock taking the room that's left (up to the height chosen in Customize
+                // look). When the capsule grows, the dock gets shorter and scrolls, with an arrow saying there's more.
+                BoxWithConstraints(Modifier.width(railWidth.dp).fillMaxHeight().padding(bottom = 8.dp)) {
+                    val railHeight = maxHeight
+                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha) { pkg -> notificationFilter = pkg; notes.show() }
+                        DockColumn(dock, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = railHeight * dockHeight),
+                            iconSize = (railWidth * .57f).dp, alpha = railAlpha, onLaunch = launch, onChoose = { pickDockSlot = it })
+                    }
                 }
             }
+            }
+            // Page dots, when there's more than one page. Tap one to go there.
+            if (pageCount > 1) Row(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 40.dp, end = railWidth.dp)) {
+                repeat(pageCount) { i ->
+                    val selected = i == homePager.currentPage
+                    Box(Modifier.clip(CircleShape).clickable { scope.launch { homePager.animateScrollToPage(i) } }.padding(5.dp)) {
+                        Box(Modifier.size(if (selected) 8.dp else 6.dp).clip(CircleShape)
+                            .background(Color.White.copy(alpha = if (selected) .9f else .4f)))
+                    }
+                }
+            }
+            // The wallpaper control: tiny, bottom-left.
+            if (wallpaperCard) WallpaperMini(Modifier.align(Alignment.BottomStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 14.dp, bottom = 10.dp))
             // A small handle says there's more below.
             Box(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 10.dp)
                 .clip(RoundedCornerShape(50)).clickable { drawer.show() }.padding(horizontal = 24.dp, vertical = 10.dp)) {
@@ -203,7 +253,11 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             }
             Box(Modifier.align(Alignment.Center)) {
                 DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem({ Text("Add widget") }, { menu = false; requests.pickTarget = Widgets.Target.HOME; requests.pickWidget = true })
+                    DropdownMenuItem({ Text("Add widget") }, { menu = false; requests.pickTarget = Widgets.Target.HOME; requests.pickPage = homePager.currentPage; requests.pickWidget = true })
+                    DropdownMenuItem({ Text("Add page") }, { menu = false
+                        val page = app.prefs.addPage()
+                        scope.launch { delay(50); homePager.animateScrollToPage(page) } })
+                    DropdownMenuItem({ Text("Customize look") }, { menu = false; lookSheet = true })
                     DropdownMenuItem({ Text("Edit Smart Stack") }, { menu = false; stackEditor = true })
                     DropdownMenuItem({ Text(if (editing) "Done editing" else "Edit Home") }, { menu = false; editing = !editing })
                     DropdownMenuItem({ Text("Wallpaper") }, { menu = false
@@ -238,8 +292,10 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             StackEditor(onAddWidget = { requests.pickTarget = Widgets.Target.STACK; requests.pickWidget = true },
                 onAutoPick = onAutoPick, onClose = { stackEditor = false })
         }
+        if (lookSheet) LookSheet(onClose = { lookSheet = false })
         AnimatedVisibility(requests.pickWidget, enter = fadeIn(), exit = fadeOut()) {
-            WidgetPicker(onPick = { info -> requests.pickWidget = false; if (requests.pickTarget == Widgets.Target.HOME) editing = true; onAddWidget(info, requests.pickTarget) },
+            WidgetPicker(onPick = { info -> requests.pickWidget = false; if (requests.pickTarget == Widgets.Target.HOME) editing = true
+                onAddWidget(info, requests.pickTarget, requests.pickPage) },
                 onClose = { requests.pickWidget = false })
         }
     }

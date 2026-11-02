@@ -181,7 +181,7 @@ class SettingsActivity : ComponentActivity() {
                         }
                         Toggle("Lock screen too", null, wpLock) { prefs.setWallpaperLock(it) }
                         Toggle("Camera photos only", "Leave out screenshots, downloads and chat images", cameraOnly) { prefs.setWallpaperCameraOnly(it) }
-                        Toggle("Like / dislike buttons on Home", "Dislike swaps the photo at once and it never comes back", wpCard) { prefs.setWallpaperCard(it) }
+                        Toggle("Wallpaper button on Home", "A tiny button in the bottom-left corner: tap for like, new photo and dislike", wpCard) { prefs.setWallpaperCard(it) }
                         Row_("New photo now") { Wallpapers.changeNow(this@SettingsActivity) }
                         Row_("Forget likes and dislikes") {
                             prefs.forgetPhotoChoices()
@@ -194,6 +194,9 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 Group("Look") {
+                    Text("Rail width, dock height and transparency: hold an empty spot on Home › Customize look. " +
+                        "More pages for widgets: hold Home › Add page.", color = EmberColors.Secondary,
+                        style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     Toggle("Colours from wallpaper", "Material You: the accent and surfaces follow your wallpaper", wallpaper) { prefs.setWallpaperColors(it) }
                     Toggle("Hide Android's status bar on Home", "The rail shows the same things", hideBar) { prefs.setHideStatusBar(it) }
                 }

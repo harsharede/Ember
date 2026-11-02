@@ -78,8 +78,8 @@ object Widgets {
         private set
     lateinit var manager: AppWidgetManager
         private set
-    private val queue = ArrayDeque<Pair<AppWidgetProviderInfo, Target>>()
-    private var pending: Pair<Int, Target>? = null
+    private val queue = ArrayDeque<Triple<AppWidgetProviderInfo, Target, Int>>()
+    private var pending: Triple<Int, Target, Int>? = null
     private var lastNudge = 0L
 
     fun init(context: Context) {
@@ -88,18 +88,18 @@ object Widgets {
     }
 
     /** Add [info]: bind it (Android asks the first time), run its setup screen if it has one, then place it. */
-    fun add(activity: Activity, info: AppWidgetProviderInfo, target: Target = Target.HOME) = addAll(activity, listOf(info), target)
+    fun add(activity: Activity, info: AppWidgetProviderInfo, target: Target = Target.HOME, page: Int = 0) = addAll(activity, listOf(info), target, page)
 
     /** Add several, one after another (the Smart Stack's "pick for me"). */
-    fun addAll(activity: Activity, infos: List<AppWidgetProviderInfo>, target: Target) {
-        infos.forEach { queue.addLast(it to target) }
+    fun addAll(activity: Activity, infos: List<AppWidgetProviderInfo>, target: Target, page: Int = 0) {
+        infos.forEach { queue.addLast(Triple(it, target, page)) }
         if (pending == null) next(activity)
     }
 
     private fun next(activity: Activity) {
-        val (info, target) = queue.removeFirstOrNull() ?: return
+        val (info, target, page) = queue.removeFirstOrNull() ?: return
         val id = host.allocateAppWidgetId()
-        pending = id to target
+        pending = Triple(id, target, page)
         if (manager.bindAppWidgetIdIfAllowed(id, info.profile, info.provider, null)) configure(activity, id, info)
         else runCatching {
             @Suppress("DEPRECATION")
@@ -111,7 +111,7 @@ object Widgets {
     }
 
     fun onResult(activity: Activity, requestCode: Int, resultCode: Int) {
-        val (id, _) = pending ?: return
+        val id = pending?.first ?: return
         when (requestCode) {
             REQUEST_BIND -> {
                 val info = manager.getAppWidgetInfo(id)
@@ -131,6 +131,7 @@ object Widgets {
 
     private fun place(activity: Activity, id: Int) {
         val target = pending?.second ?: Target.HOME
+        val page = pending?.third ?: 0
         pending = null
         val prefs = EmberApp.instance.prefs
         if (target == Target.STACK) prefs.addStackItem("widget:$id")
@@ -138,7 +139,7 @@ object Widgets {
             val info = manager.getAppWidgetInfo(id)
             // Start at the height the widget asks for, within reason; it can be made taller or shorter in edit mode.
             val dp = info?.minHeight?.let { px -> (px / EmberApp.instance.resources.displayMetrics.density).toInt() } ?: 160
-            prefs.addWidget(Prefs.HomeWidget(id, dp.coerceIn(90, 420)))
+            prefs.addWidget(Prefs.HomeWidget(id, dp.coerceIn(90, 420), page))
         }
         next(activity)
     }

@@ -51,7 +51,39 @@ class Prefs(context: Context) {
     /** Widgets on Home, top to bottom. */
     val widgets: StateFlow<List<HomeWidget>> = _widgets.asStateFlow()
 
-    data class HomeWidget(val id: Int, val heightDp: Int)
+    /** A widget on Home: which page (0 is the Today page) and how tall. */
+    data class HomeWidget(val id: Int, val heightDp: Int, val page: Int = 0)
+
+    private val _pages = MutableStateFlow(sp.getInt(KEY_PAGES, 1).coerceAtLeast(1))
+    /** Home pages: the Today page plus any blank pages added for widgets. */
+    val pageCount: StateFlow<Int> = _pages.asStateFlow()
+    fun addPage(): Int { _pages.value += 1; sp.edit().putInt(KEY_PAGES, _pages.value).apply(); return _pages.value - 1 }
+    /** Remove page [page] (never the Today page); its widgets go with it, later pages move up. Returns the removed widget ids. */
+    fun removePage(page: Int): List<Int> {
+        if (page <= 0 || page >= _pages.value) return emptyList()
+        val gone = _widgets.value.filter { it.page == page }.map { it.id }
+        saveWidgets(_widgets.value.filter { it.page != page }.map { if (it.page > page) it.copy(page = it.page - 1) else it })
+        _pages.value -= 1; sp.edit().putInt(KEY_PAGES, _pages.value).apply()
+        return gone
+    }
+
+    // How Home looks, adjusted live from Home's "Customize look".
+    private val _railWidth = MutableStateFlow(sp.getInt(KEY_RAIL_WIDTH, 92))
+    /** Width of the right rail (status capsule and dock), in dp. Dock icons scale with it. */
+    val railWidth: StateFlow<Int> = _railWidth.asStateFlow()
+    private val _dockHeight = MutableStateFlow(sp.getFloat(KEY_DOCK_HEIGHT, 1f))
+    /** The most of the rail's height the dock may take, from 0.3 to 1 (all that's left under the capsule). */
+    val dockHeight: StateFlow<Float> = _dockHeight.asStateFlow()
+    private val _railAlpha = MutableStateFlow(sp.getFloat(KEY_RAIL_ALPHA, .8f))
+    /** How solid the rail's glass is (0 clear, 1 solid). */
+    val railAlpha: StateFlow<Float> = _railAlpha.asStateFlow()
+    private val _cardAlpha = MutableStateFlow(sp.getFloat(KEY_CARD_ALPHA, .8f))
+    /** How solid Home's cards are (the Smart Stack, suggestions, Ember's cards). */
+    val cardAlpha: StateFlow<Float> = _cardAlpha.asStateFlow()
+    fun setRailWidth(dp: Int) { _railWidth.value = dp; sp.edit().putInt(KEY_RAIL_WIDTH, dp).apply() }
+    fun setDockHeight(f: Float) { _dockHeight.value = f; sp.edit().putFloat(KEY_DOCK_HEIGHT, f).apply() }
+    fun setRailAlpha(a: Float) { _railAlpha.value = a; sp.edit().putFloat(KEY_RAIL_ALPHA, a).apply() }
+    fun setCardAlpha(a: Float) { _cardAlpha.value = a; sp.edit().putFloat(KEY_CARD_ALPHA, a).apply() }
 
     // The Smart Stack: Ember's own cards, app feeds and widgets in one card that flips every few seconds.
     // Items are "card:weather", "card:people", "card:media", "card:calendar", "card:suggestions", "feed:<package>", "widget:<id>".
@@ -180,22 +212,25 @@ class Prefs(context: Context) {
     fun addWidget(widget: HomeWidget) = saveWidgets(_widgets.value.filter { it.id != widget.id } + widget)
     fun removeWidget(id: Int) = saveWidgets(_widgets.value.filter { it.id != id })
     fun resizeWidget(id: Int, heightDp: Int) = saveWidgets(_widgets.value.map { if (it.id == id) it.copy(heightDp = heightDp) else it })
+    /** Move a widget up or down among the widgets on its own page. */
     fun moveWidget(id: Int, by: Int) {
         val list = _widgets.value.toMutableList()
         val i = list.indexOfFirst { it.id == id }
-        val j = i + by
-        if (i < 0 || j !in list.indices) return
-        list.add(j, list.removeAt(i))
+        if (i < 0) return
+        val samePage = list.indices.filter { list[it].page == list[i].page }
+        val at = samePage.indexOf(i)
+        val j = samePage.getOrNull(at + by) ?: return
+        val t = list[i]; list[i] = list[j]; list[j] = t
         saveWidgets(list)
     }
     private fun saveWidgets(list: List<HomeWidget>) {
         _widgets.value = list
-        sp.edit().putString(KEY_WIDGETS, list.joinToString(SEP) { "${it.id}$FIELD${it.heightDp}" }).apply()
+        sp.edit().putString(KEY_WIDGETS, list.joinToString(SEP) { "${it.id}$FIELD${it.heightDp}$FIELD${it.page}" }).apply()
     }
     private fun readWidgets(): List<HomeWidget> = sp.getString(KEY_WIDGETS, null).orEmpty().split(SEP).mapNotNull { line ->
         val parts = line.split(FIELD)
         val id = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
-        HomeWidget(id, parts.getOrNull(1)?.toIntOrNull() ?: 160)
+        HomeWidget(id, parts.getOrNull(1)?.toIntOrNull() ?: 160, parts.getOrNull(2)?.toIntOrNull() ?: 0)
     }
 
     fun hideStatus(id: String) = setHidden(_hiddenStatus.value + id)
@@ -253,6 +288,11 @@ class Prefs(context: Context) {
         private const val KEY_DRAWER_TAB = "drawer_tab"
         private const val KEY_PERSISTENT = "show_persistent"
         private const val KEY_WIDGETS = "widgets"
+        private const val KEY_PAGES = "pages"
+        private const val KEY_RAIL_WIDTH = "rail_width"
+        private const val KEY_DOCK_HEIGHT = "dock_height"
+        private const val KEY_RAIL_ALPHA = "rail_alpha"
+        private const val KEY_CARD_ALPHA = "card_alpha"
         private const val KEY_LIGHT = "light"
         private const val KEY_STACK = "stack"
         private const val KEY_STACK_HEIGHT = "stack_height"
