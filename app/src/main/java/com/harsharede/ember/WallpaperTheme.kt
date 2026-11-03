@@ -26,17 +26,42 @@ object WallpaperTheme {
     /** The wallpaper's most colourful main colour (ARGB), or null before it's been read. */
     val seed: StateFlow<Int?> = _seed.asStateFlow()
 
+    private const val STORE = "wallpaper_theme"
+    private const val KEY_SEED = "seed"
+
     fun init(context: Context) {
+        val store = context.getSharedPreferences(STORE, Context.MODE_PRIVATE)
+        // The last known colour first, so Ember opens in the right colours straight away.
+        if (store.contains(KEY_SEED)) _seed.value = store.getInt(KEY_SEED, 0)
         val wm = WallpaperManager.getInstance(context)
         runCatching {
             wm.addOnColorsChangedListener({ colors, which ->
-                if (which and WallpaperManager.FLAG_SYSTEM != 0) colors?.let { _seed.value = pick(it) }
+                if (which and WallpaperManager.FLAG_SYSTEM != 0) colors?.let { set(context, pick(it), "changed") }
             }, Handler(Looper.getMainLooper()))
         }
-        // The first read can be slow on some phones; keep it off the main thread.
+        // The first read can be slow on some phones; keep it off the main thread. Samsung files the home screen's
+        // wallpaper under its own extra flags, so ask with those too when the plain question gets no answer.
         thread(name = "wallpaper-colours") {
-            runCatching { wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull()?.let { _seed.value = pick(it) }
+            val colors = listOf(WallpaperManager.FLAG_SYSTEM, WallpaperManager.FLAG_SYSTEM or 4, WallpaperManager.FLAG_SYSTEM or 8)
+                .firstNotNullOfOrNull { which -> runCatching { wm.getWallpaperColors(which) }.getOrNull() }
+            if (colors != null) set(context, pick(colors), "read")
+            else android.util.Log.i("EmberTheme", "The phone didn't report the wallpaper's colours; keeping ${_seed.value?.let { Integer.toHexString(it) }}")
         }
+    }
+
+    /** Ember just set this photo as the wallpaper: take the colours from it directly. */
+    fun fromBitmap(context: Context, bitmap: android.graphics.Bitmap) {
+        runCatching {
+            val small = android.graphics.Bitmap.createScaledBitmap(bitmap, 112, (112f * bitmap.height / bitmap.width).toInt().coerceAtLeast(1), true)
+            set(context, pick(WallpaperColors.fromBitmap(small)), "photo")
+            if (small !== bitmap) small.recycle()
+        }
+    }
+
+    private fun set(context: Context, seed: Int, from: String) {
+        android.util.Log.i("EmberTheme", "Accent seed ${Integer.toHexString(seed)} from $from")
+        _seed.value = seed
+        context.getSharedPreferences(STORE, Context.MODE_PRIVATE).edit().putInt(KEY_SEED, seed).apply()
     }
 
     /** Of the wallpaper's main colours, the most colourful one, so a grey sky doesn't win over the red door below it. */

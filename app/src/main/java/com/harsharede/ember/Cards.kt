@@ -254,7 +254,20 @@ fun NowPlayingCard(info: NowPlaying.Info) {
         }
     }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().glass().clickable { openApp(context, info.packageName) }) {
-        if (maxHeight < 170.dp) Row(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Middle height (a short Smart Stack): artwork, then the title and app over the controls, so the title gets the
+        // card's full width instead of the sliver left beside three buttons.
+        if (maxHeight in 100.dp..170.dp) Row(Modifier.fillMaxSize().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            art(Modifier.fillMaxHeight().aspectRatio(1f))
+            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.Center) {
+                Text(info.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PackageIcon(info.packageName, 12.dp)
+                    Text("  " + info.artist.ifBlank { if (info.playing) "Now playing" else "Paused" }, color = EmberColors.Secondary,
+                        fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) { buttons() }
+            }
+        } else if (maxHeight < 100.dp) Row(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             art(Modifier.fillMaxHeight().aspectRatio(1f))
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(info.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)

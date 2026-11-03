@@ -256,6 +256,8 @@ object Wallpapers {
         // Home's parallax uses a slightly wider copy; the system wallpaper is its middle.
         val which = if (prefs.wallpaperLock.value) WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK else WallpaperManager.FLAG_SYSTEM
         WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, which)
+        // The accent comes from the photo itself (some phones never report the wallpaper's colours back).
+        WallpaperTheme.fromBitmap(context, bitmap)
         bitmap.recycle()
         val place = runCatching { placeOf(context, pick.uri) }.getOrNull()
         prefs.setWallpaperPhoto(pick.id, pick.takenAt)
