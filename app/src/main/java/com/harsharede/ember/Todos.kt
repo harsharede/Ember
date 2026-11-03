@@ -46,10 +46,20 @@ object Todos {
 
     /** Open what the to-do is about: the message itself if Ember still knows how, otherwise its app. */
     fun open(context: Context, todo: Prefs.Todo) {
-        val sent = intents[todo.id]?.let { runCatching { it.send(); true }.getOrDefault(false) } ?: false
-        if (!sent) runCatching {
-            context.startActivity(context.packageManager.getLaunchIntentForPackage(todo.packageName)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
+        // Android 14+ silently drops an app start from a PendingIntent unless the sender (Ember, in front) allows it.
+        val sent = intents[todo.id]?.let { intent ->
+            runCatching { intent.send(context, 0, null, null, null, null, NotificationStore.sendOptions()); true }.getOrDefault(false)
+        } ?: false
+        if (sent) return
+        // Otherwise the app itself: through Ember's own list first (that covers Work profile apps), then Android's.
+        val apps = EmberApp.instance.apps
+        val entry = apps.apps.value.firstOrNull { it.packageName == todo.packageName }
+        val opened = if (entry != null) runCatching { apps.launch(entry); true }.getOrDefault(false)
+        else context.packageManager.getLaunchIntentForPackage(todo.packageName)?.let { launch ->
+            runCatching { context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true }.getOrDefault(false)
+        } ?: false
+        if (!opened) android.widget.Toast.makeText(context, "${apps.labelForPackage(todo.packageName)} can't be opened from here",
+            android.widget.Toast.LENGTH_SHORT).show()
     }
 }
 

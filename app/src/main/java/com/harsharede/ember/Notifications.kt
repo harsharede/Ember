@@ -93,7 +93,7 @@ object NotificationStore {
     }
 
     /** Android 14+ wants the sender to say it may start the app's screen; Ember is in front when the user taps. */
-    private fun sendOptions(): Bundle? =
+    internal fun sendOptions(): Bundle? =
         if (Build.VERSION.SDK_INT >= 34) ActivityOptions.makeBasic()
             .setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle()
         else null

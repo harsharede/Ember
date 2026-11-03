@@ -12,8 +12,8 @@ android {
         applicationId = "com.harsharede.ember"
         minSdk = 31
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.2.4"
+        versionCode = 25
+        versionName = "1.2.5"
     }
 
     signingConfigs {
