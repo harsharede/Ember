@@ -299,7 +299,9 @@ private fun GroupSections(apps: List<AppEntry>, layer: Layer?, onLaunch: (AppEnt
             stickyHeader(key = "s-$group") {
                 var menu by remember { mutableStateOf(false) }
                 Box {
-                    Row(Modifier.fillMaxWidth().background(HeaderScrim).combinedClickable(onLongClick = { menu = true }) {}
+                    // Nearly solid, so the icons scrolling underneath don't show through the name.
+                    Row(Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = .94f)).combinedClickable(onLongClick = { menu = true }) {}
                         .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(group, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                         Text("  ${list.size}", fontSize = 13.sp, color = EmberColors.Secondary)
