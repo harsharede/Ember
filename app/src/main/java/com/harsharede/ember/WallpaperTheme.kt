@@ -45,7 +45,15 @@ object WallpaperTheme {
             val colors = listOf(WallpaperManager.FLAG_SYSTEM, WallpaperManager.FLAG_SYSTEM or 4, WallpaperManager.FLAG_SYSTEM or 8)
                 .firstNotNullOfOrNull { which -> runCatching { wm.getWallpaperColors(which) }.getOrNull() }
             if (colors != null) set(context, pick(colors), "read")
-            else android.util.Log.i("EmberTheme", "The phone didn't report the wallpaper's colours; keeping ${_seed.value?.let { Integer.toHexString(it) }}")
+            else if (_seed.value == null) {
+                // Ember keeps its own copy of the photo it set (for parallax): read the colours from that.
+                val file = Wallpapers.wideFile(context)
+                val bitmap = if (file.exists()) runCatching {
+                    android.graphics.BitmapFactory.decodeFile(file.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = 8 })
+                }.getOrNull() else null
+                if (bitmap != null) { fromBitmap(context, bitmap); bitmap.recycle() }
+                else android.util.Log.i("EmberTheme", "No wallpaper colours yet; they come with the next photo")
+            }
         }
     }
 

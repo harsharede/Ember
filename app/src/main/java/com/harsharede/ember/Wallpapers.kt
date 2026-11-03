@@ -211,16 +211,16 @@ object Wallpapers {
         scope.launch {
             if (!lock.tryLock()) return@launch
             _changing.value = true
-            try { runCatching { change(app) } } finally { _changing.value = false; lock.unlock() }
+            try { runCatching { change(app) }.onFailure { android.util.Log.w("EmberWallpaper", "Change failed", it) } } finally { _changing.value = false; lock.unlock() }
         }
     }
 
     private suspend fun change(context: Context) = withContext(Dispatchers.IO) {
         val prefs = EmberApp.instance.prefs
         prefs.setWallpaperPending(false)
-        if (!hasPhotoAccess(context)) return@withContext
+        if (!hasPhotoAccess(context)) { android.util.Log.i("EmberWallpaper", "No photo access"); return@withContext }
         val photos = listPhotos(context, prefs.wallpaperCameraOnly.value, prefs.photoSource.value, prefs.photoAlbums.value, prefs.likedPhotos.value)
-        if (photos.isEmpty()) return@withContext
+        if (photos.isEmpty()) { android.util.Log.i("EmberWallpaper", "No photos from the chosen source"); return@withContext }
         val scores = loadScores(context)
         val disliked = prefs.dislikedPhotos.value
         val liked = prefs.likedPhotos.value
@@ -248,11 +248,12 @@ object Wallpapers {
         val memories = if (prefs.onThisDay.value && prefs.memoryDay.value != today)
             known.filter { yearsAgoToday(it.takenAt, now) > 0 && scores.getValue(it.id).total >= .35f } else emptyList()
         val memory = pickWeighted(memories, weight, Random.nextDouble())
-        val pick = memory ?: pickWeighted(pool, weight, Random.nextDouble()) ?: return@withContext
+        val pick = memory ?: pickWeighted(pool, weight, Random.nextDouble())
+            ?: run { android.util.Log.i("EmberWallpaper", "Nothing to pick from ${photos.size} photos, ${known.size} known"); return@withContext }
         val yearsAgo = if (memory != null) yearsAgoToday(pick.takenAt, now) else 0
         if (memory != null) prefs.setMemoryDay(today)
 
-        val bitmap = render(context, pick, scores.getValue(pick.id)) ?: return@withContext
+        val bitmap = render(context, pick, scores.getValue(pick.id)) ?: run { android.util.Log.i("EmberWallpaper", "Couldn't render the photo"); return@withContext }
         // Home's parallax uses a slightly wider copy; the system wallpaper is its middle.
         val which = if (prefs.wallpaperLock.value) WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK else WallpaperManager.FLAG_SYSTEM
         WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, which)
