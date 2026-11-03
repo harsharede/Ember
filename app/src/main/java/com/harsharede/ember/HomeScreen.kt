@@ -225,8 +225,9 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
         Box(Modifier.fillMaxSize()
             .graphicsLayer {
                 // Home sinks back a little as a layer comes over it.
-                val p = maxOf(drawer.progress, notes.progress)
-                alpha = 1f - .5f * p
+                val p = maxOf(drawer.progress, notes.progress, if (pickDockSlot != null || stackEditor || requests.pickWidget) 1f else 0f)
+                // Gone completely by the time a layer is half in, so only the wallpaper shows through its glass.
+                alpha = (1f - 2f * p).coerceIn(0f, 1f)
                 scaleX = 1f - .05f * p; scaleY = scaleX
             }
             // A light shade at the top and bottom keeps text readable; it fades out on the wallpaper page.

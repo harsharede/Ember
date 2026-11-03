@@ -263,7 +263,7 @@ fun CalendarCard() {
     val events by CardData.events.collectAsStateWithLifecycle()
     CardFrame("Up next") {
         if (events.isEmpty()) { Text("Nothing in the next two days.", style = MaterialTheme.typography.bodyMedium); return@CardFrame }
-        events.take(3).forEach { e ->
+        events.take(2).forEach { e ->
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.id))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
