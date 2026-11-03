@@ -181,6 +181,11 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val drawerOpen by remember { derivedStateOf { drawer.progress >= 1f } }
     val drawerShown by remember { derivedStateOf { drawer.visible } }
     val notesShown by remember { derivedStateOf { notes.visible } }
+    // Opening the notification page counts as having seen everything in it.
+    val notesOpen by remember { derivedStateOf { notes.progress >= 1f } }
+    LaunchedEffect(notesOpen) { if (notesOpen) app.prefs.markNotesSeen() }
+    val lastSeen by app.prefs.lastSeenNotes.collectAsStateWithLifecycle()
+    val tickerOn by app.prefs.unreadTicker.collectAsStateWithLifecycle()
 
     // Only what's worth attention counts on the rail: not silent ones, not ones that can't be dismissed.
     val focusOn = focusUntil > now
@@ -271,6 +276,11 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                         LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 90.dp)) {
                             if (page == 0) {
                                 item("date") { Box(Modifier.fallIn(entrance, 0, cardsFall, Entrance.Kind.CARD)) { DateHeader(now) } }
+                                // What arrived since you last looked, rolling past one line at a time.
+                                val unread = unreadOf(counted, lastSeen)
+                                if (tickerOn && unread.isNotEmpty()) item("unread") {
+                                    UnreadTicker(unread) { notificationFilter = null; notes.show() }
+                                }
                                 if (focusOn) item("focus") {
                                     // Focus is on: how long is left, and a tap to end it.
                                     Row(Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primaryContainer)
@@ -367,7 +377,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                     DropdownMenuItem({ Text("Add page") }, { menu = false
                         val page = app.prefs.addPage()
                         scope.launch { delay(50); homePager.animateScrollToPage(page) } })
-                    DropdownMenuItem({ Text("Customize look") }, { menu = false; lookSheet = true })
+                    DropdownMenuItem({ Text("Customise look") }, { menu = false; lookSheet = true })
                     DropdownMenuItem({ Text(if (focusOn) "Focus (on)" else "Focus…") }, { menu = false; focusSheet = true })
                     DropdownMenuItem({ Text("Edit Smart Stack") }, { menu = false; stackEditor = true })
                     DropdownMenuItem({ Text(if (editing) "Done editing" else "Edit Home") }, { menu = false; editing = !editing })
@@ -439,7 +449,7 @@ private fun WeatherIcons(size: androidx.compose.ui.unit.Dp = 18.dp) {
 }
 
 /**
- * The day and date in one of four styles (Customize look › Date style): Classic, Big day (a large day number beside the
+ * The day and date in one of four styles (Customise look › Date style): Classic, Big day (a large day number beside the
  * weekday and month), One line, and Compact.
  */
 @Composable

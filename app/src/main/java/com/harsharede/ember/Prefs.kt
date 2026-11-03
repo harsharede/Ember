@@ -67,7 +67,7 @@ class Prefs(context: Context) {
         return gone
     }
 
-    // How Home looks, adjusted live from Home's "Customize look".
+    // How Home looks, adjusted live from Home's "Customise look".
     private val _railWidth = MutableStateFlow(sp.getInt(KEY_RAIL_WIDTH, 92))
     /** Width of the right rail (status capsule and dock), in dp. Dock icons scale with it. */
     val railWidth: StateFlow<Int> = _railWidth.asStateFlow()
@@ -343,6 +343,14 @@ class Prefs(context: Context) {
     val headerWeather: StateFlow<Boolean> = _headerWeather.asStateFlow()
     fun setHeaderWeather(on: Boolean) { _headerWeather.value = on; sp.edit().putBoolean(KEY_HEADER_WEATHER, on).apply() }
 
+    // Unread: what arrived since the notification page was last opened, and the ticker that shows it on Home.
+    private val _lastSeenNotes = MutableStateFlow(sp.getLong(KEY_LAST_SEEN, 0L))
+    val lastSeenNotes: StateFlow<Long> = _lastSeenNotes.asStateFlow()
+    fun markNotesSeen(now: Long = System.currentTimeMillis()) { _lastSeenNotes.value = now; sp.edit().putLong(KEY_LAST_SEEN, now).apply() }
+    private val _unreadTicker = MutableStateFlow(sp.getBoolean(KEY_UNREAD_TICKER, true))
+    val unreadTicker: StateFlow<Boolean> = _unreadTicker.asStateFlow()
+    fun setUnreadTicker(on: Boolean) { _unreadTicker.value = on; sp.edit().putBoolean(KEY_UNREAD_TICKER, on).apply() }
+
     // How the date on Home and the time on the rail are drawn.
     private val _dateStyle = MutableStateFlow(sp.getInt(KEY_DATE_STYLE, 0))
     /** 0 Classic, 1 Big day, 2 One line, 3 Compact. */
@@ -522,6 +530,8 @@ class Prefs(context: Context) {
         private const val KEY_LIGHT = "light"
         private const val KEY_RAIL_LEFT = "rail_left"
         private const val KEY_DATE_STYLE = "date_style"
+        private const val KEY_LAST_SEEN = "last_seen_notes"
+        private const val KEY_UNREAD_TICKER = "unread_ticker"
         private const val KEY_CLOCK_STYLE = "clock_style"
         private const val KEY_LIGHT_SHAPE = "light_shape"
         private const val KEY_LIGHT_PLACE = "light_place"

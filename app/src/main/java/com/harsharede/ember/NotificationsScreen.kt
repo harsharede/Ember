@@ -80,7 +80,7 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
         // Whatever's playing stays pinned at the top, with its controls, until it stops.
         val playing by NowPlaying.info.collectAsStateWithLifecycle()
         playing?.let { info ->
-            Box(Modifier.fillMaxWidth().height(132.dp).padding(horizontal = 12.dp, vertical = 6.dp)) { NowPlayingCard(info) }
+            Box(Modifier.fillMaxWidth().height(88.dp).padding(horizontal = 12.dp, vertical = 6.dp)) { NowPlayingCard(info) }
         }
         if (showTodos) {
             LazyColumn(Modifier.fillMaxSize().nestedScroll(layer.closeConnection), contentPadding = PaddingValues(12.dp)) {

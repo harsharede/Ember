@@ -164,7 +164,7 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
                     SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
             }
         }
-        // Same glass as Home's cards (Customize look › Card transparency).
+        // Same glass as Home's cards (Customise look › Card transparency).
         val cardAlpha by prefs.cardAlpha.collectAsStateWithLifecycle()
         androidx.compose.runtime.CompositionLocalProvider(LocalGlassAlpha provides cardAlpha) {
             HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->

@@ -385,7 +385,7 @@ fun memoryLabel(yearsAgo: Int): String? = when {
     else -> "$yearsAgo years ago today"
 }
 
-/** The rail's time in one of three styles (Customize look › Clock style): Digital, Stacked, 12-hour. */
+/** The rail's time in one of three styles (Customise look › Clock style): Digital, Stacked, 12-hour. */
 @Composable
 fun RailClock(now: Long, style: Int, size: androidx.compose.ui.unit.TextUnit) {
     val date = Date(now)

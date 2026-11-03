@@ -58,7 +58,7 @@ object WeatherStore {
         scope.launch {
             runCatching {
                 val place = EmberApp.instance.prefs.weatherPlace.value ?: locate(app)
-                if (place == null) { _problem.value = "Choose a weather place: hold Home › Customize look › Weather place"; return@launch }
+                if (place == null) { _problem.value = "Choose a weather place: hold Home › Customise look › Weather place"; return@launch }
                 _now.value = fetch(place.first, place.second, place.third)
                 _problem.value = null
             }.onFailure { if (_now.value == null) _problem.value = "Couldn't get the weather. Check your connection." }

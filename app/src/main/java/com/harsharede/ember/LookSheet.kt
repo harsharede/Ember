@@ -43,7 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 
 /**
- * Customize look: the rail's width, how tall the dock may grow, and how see-through the rail and the cards are. Home
+ * Customise look: the rail's width, how tall the dock may grow, and how see-through the rail and the cards are. Home
  * stays visible behind with no dimming, so each change shows as the slider moves.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,7 +75,7 @@ fun LookSheet(onClose: () -> Unit) {
         Column(Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState())
             .padding(horizontal = 24.dp).padding(bottom = 12.dp).navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Customize look", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text("Customise look", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 TextButton({
                     prefs.setRailWidth(92); prefs.setDockHeight(1f); prefs.setRailAlpha(.8f); prefs.setCardAlpha(.8f)
                     prefs.setDockRound(true); prefs.setDockCorner(18); prefs.setDateStyle(0); prefs.setClockStyle(0)

@@ -1,0 +1,4 @@
+• Unread on Home: new notifications roll past under the date until you open them
+• Pinned player always shows its controls
+• Up next fits its events on one line
+• Wording tidied (Customise look, Next card every)

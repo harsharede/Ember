@@ -227,7 +227,7 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 Group("Smart Stack") {
-                    Choice("Next widget every", listOf(5 to "5 s", 7 to "7 s", 10 to "10 s"), stackSeconds) { prefs.setStackSeconds(it) }
+                    Choice("Next card every", listOf(5 to "5 s", 7 to "7 s", 10 to "10 s"), stackSeconds) { prefs.setStackSeconds(it) }
                     Text("It only moves while Home is on screen, and pauses for a few seconds after you touch it. " +
                         "Choose what's in it with the pencil under the stack on Home.", color = EmberColors.Secondary,
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
@@ -319,7 +319,7 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 Group("Look") {
-                    Text("Rail width, dock height and transparency: hold an empty spot on Home › Customize look. " +
+                    Text("Rail width, dock height and transparency: hold an empty spot on Home › Customise look. " +
                         "More pages for widgets: hold Home › Add page.", color = EmberColors.Secondary,
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     Toggle("Colours from wallpaper", "Material You: the accent and surfaces follow your wallpaper", wallpaper) { prefs.setWallpaperColors(it) }
@@ -333,7 +333,9 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 Group("Notifications") {
-                    Toggle("Pill while using the phone", "A light glows at the top left when something arrives", pill) { prefs.setPill(it) }
+                    Toggle("Light while using the phone", "A small light glows in the corner when something arrives, instead of a banner", pill) { prefs.setPill(it) }
+                    val ticker by prefs.unreadTicker.collectAsStateWithLifecycle()
+                    Toggle("Unread on Home", "New notifications roll past under the date, one line at a time, until you open them", ticker) { prefs.setUnreadTicker(it) }
                     Toggle("Show ones that can't be dismissed", "System and \"always on\" notices, in their own folded section", persistent) { prefs.setShowPersistent(it) }
                     Text("So Android's own banners don't cover the screen as well: Notifications › Notification pop-up style, and turn pop-ups off.",
                         color = EmberColors.Secondary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))

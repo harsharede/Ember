@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AcUnit
@@ -228,30 +229,52 @@ private fun Avatar(image: ImageBitmap?, name: String, sizeDp: Int) {
     }
 }
 
+/**
+ * What's playing, with controls. With room (a tall Smart Stack) it's a big card with the artwork; in a short space (the
+ * player pinned on the notification page, or a short stack) it's one row with the controls on the right, so the
+ * controls are never cut off.
+ */
 @Composable
 fun NowPlayingCard(info: NowPlaying.Info) {
     val context = LocalContext.current
-    Row(Modifier.fillMaxSize().glass().clickable { openApp(context, info.packageName) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.fillMaxHeight().width(120.dp).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
-            contentAlignment = Alignment.Center) {
-            if (info.art != null) Image(info.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            else PackageIcon(info.packageName, 48.dp)
+    val controls = info.controller.transportControls
+    val buttons: @Composable () -> Unit = {
+        IconButton({ controls.skipToPrevious() }) { Icon(Icons.Rounded.SkipPrevious, "Previous") }
+        IconButton({ if (info.playing) controls.pause() else controls.play() },
+            Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary)) {
+            Icon(if (info.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (info.playing) "Pause" else "Play",
+                tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp))
         }
-        Column(Modifier.weight(1f).padding(start = 14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PackageIcon(info.packageName, 16.dp)
-                Text(if (info.playing) "  Now playing" else "  Paused", style = MaterialTheme.typography.labelMedium, color = EmberColors.Secondary)
-            }
-            Text(info.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-            Text(info.artist, color = EmberColors.Secondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val controls = info.controller.transportControls
-            Row(Modifier.padding(top = 4.dp)) {
-                IconButton({ controls.skipToPrevious() }) { Icon(Icons.Rounded.SkipPrevious, "Previous") }
-                IconButton({ if (info.playing) controls.pause() else controls.play() }) {
-                    Icon(if (info.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (info.playing) "Pause" else "Play",
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+        IconButton({ controls.skipToNext() }) { Icon(Icons.Rounded.SkipNext, "Next") }
+    }
+    val art: @Composable (Modifier) -> Unit = { m ->
+        Box(m.clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+            if (info.art != null) Image(info.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            else PackageIcon(info.packageName, 32.dp)
+        }
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().glass().clickable { openApp(context, info.packageName) }) {
+        if (maxHeight < 170.dp) Row(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            art(Modifier.fillMaxHeight().aspectRatio(1f))
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(info.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PackageIcon(info.packageName, 12.dp)
+                    Text("  " + info.artist.ifBlank { if (info.playing) "Now playing" else "Paused" }, color = EmberColors.Secondary,
+                        fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                IconButton({ controls.skipToNext() }) { Icon(Icons.Rounded.SkipNext, "Next") }
+            }
+            buttons()
+        } else Row(Modifier.fillMaxSize().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            art(Modifier.fillMaxHeight().width(120.dp))
+            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PackageIcon(info.packageName, 16.dp)
+                    Text(if (info.playing) "  Now playing" else "  Paused", style = MaterialTheme.typography.labelMedium, color = EmberColors.Secondary)
+                }
+                Text(info.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                Text(info.artist, color = EmberColors.Secondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) { buttons() }
             }
         }
     }
@@ -267,12 +290,14 @@ fun CalendarCard() {
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.id))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(4.dp).height(34.dp).clip(RoundedCornerShape(2.dp)).background(if (e.color != 0) Color(e.color) else MaterialTheme.colorScheme.primary))
-                Column(Modifier.padding(start = 10.dp)) {
-                    Text(e.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(eventTime(e), color = EmberColors.Secondary, fontSize = 12.sp, maxLines = 1)
-                }
+            }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                // One line per event (title, then when), so it fits however short the stack is set.
+                Box(Modifier.width(4.dp).height(20.dp).clip(RoundedCornerShape(2.dp)).background(if (e.color != 0) Color(e.color) else MaterialTheme.colorScheme.primary))
+                Text(e.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(start = 10.dp))
+                Text(eventTime(e).substringBefore(" · ").let { day ->
+                    if (e.allDay) "$day, all day" else "$day ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(e.begin))}"
+                }, color = EmberColors.Secondary, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
             }
         }
     }

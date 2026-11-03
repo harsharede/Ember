@@ -7,7 +7,7 @@ notification slip away.**
   <img src="docs/screenshots/home.png" width="23%" alt="Home: the day, weather for the next hours, the Smart Stack, and the status rail with the dock">
   <img src="docs/screenshots/left-handed.png" width="23%" alt="The same Home with the rail moved to the left for the left thumb">
   <img src="docs/screenshots/drawer-search.png" width="23%" alt="App drawer search answering a sum, with web search below">
-  <img src="docs/screenshots/customize-look.png" width="23%" alt="Customize look: date and clock styles, dock shape, rail width">
+  <img src="docs/screenshots/customize-look.png" width="23%" alt="Customise look: date and clock styles, dock shape, rail width">
 </p>
 <p align="center">
   <img src="docs/screenshots/settings.png" width="23%" alt="Settings on smoked glass over the wallpaper">
