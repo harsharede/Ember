@@ -183,7 +183,11 @@ fun SmartStackCard(
         return
     }
 
-    val pager = rememberPagerState { pages.size }
+    // A loop: a long run of pages over the same cards, starting in the middle, so after the last card the stack keeps
+    // scrolling forward into the first instead of jumping back.
+    val loop = pages.size > 1
+    val pager = rememberPagerState(initialPage = if (loop) pages.size * 500 else 0) { if (loop) pages.size * 1000 else pages.size }
+    fun itemAt(page: Int) = pages[page.mod(pages.size)]
     val scope = rememberCoroutineScope()
     var touchedAt by remember { mutableLongStateOf(0L) }
     val isActive by rememberUpdatedState(active && !editing)
@@ -196,8 +200,8 @@ fun SmartStackCard(
                 delay(seconds * 1000L)
                 val idle = System.currentTimeMillis() - touchedAt > 12_000
                 if (isActive && idle && !pager.isScrollInProgress) {
-                    val next = (pager.currentPage + 1) % pages.size
-                    if (next == 0) pager.scrollToPage(0) else pager.animateScrollToPage(next)
+                    val next = pager.currentPage + 1
+                    pager.animateScrollToPage(next)
                 }
             }
         }
@@ -206,8 +210,8 @@ fun SmartStackCard(
     Column(Modifier.fillMaxWidth()) {
         HorizontalPager(pager, Modifier.fillMaxWidth().height(animatedHeight).clip(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
             .stackSwipe(pager, scope) { touchedAt = System.currentTimeMillis() },
-            userScrollEnabled = false, beyondViewportPageCount = pages.size, pageSpacing = 12.dp, key = { pages[it] }) { page ->
-            val item = pages[page]
+            userScrollEnabled = false, beyondViewportPageCount = if (pages.size > 2) 1 else 0, pageSpacing = 12.dp) { page ->
+            val item = itemAt(page)
             Box(Modifier.fillMaxSize()) {
                 when {
                     item == "card:weather" -> WeatherCard()
@@ -227,7 +231,7 @@ fun SmartStackCard(
             Box(Modifier.size(40.dp))
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
                 if (pages.size > 1) repeat(pages.size) { i ->
-                    val selected = i == pager.currentPage
+                    val selected = i == pager.currentPage.mod(pages.size)
                     val w by animateDpAsState(if (selected) 16.dp else 6.dp, label = "dot")
                     Box(Modifier.padding(horizontal = 3.dp).size(width = w, height = 6.dp).clip(CircleShape)
                         .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = .35f)))

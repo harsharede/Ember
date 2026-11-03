@@ -126,7 +126,7 @@ fun StackEditor(onAddWidget: () -> Unit, onAutoPick: () -> Unit, onClose: () -> 
             .distinct().sortedBy { EmberApp.instance.apps.labelForPackage(it).lowercase() }
     }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = .98f)).windowInsetsPadding(WindowInsets.safeDrawing)) {
+    Column(Modifier.fillMaxSize().layerBackdrop().windowInsetsPadding(WindowInsets.safeDrawing)) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Smart Stack", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
             TextButton(onClose) { Text("Done") }

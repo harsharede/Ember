@@ -1,0 +1,7 @@
+• One smoked-glass look everywhere: Settings, menus, dialogs, drawer and groups
+• Sharp icons at every size (they could look blurry in the dock)
+• Music and video controls pinned at the top of notifications
+• Date and clock styles to choose from, with previews
+• Light shapes (pill, dot, camera ring, edge line) and positions
+• Focus suggestions from your screen time; animation preview
+• Smart Stack loops smoothly; people and web search below apps

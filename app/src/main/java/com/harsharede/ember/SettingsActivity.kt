@@ -24,6 +24,25 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.HourglassBottom
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.SignalCellularAlt
+import androidx.compose.material.icons.rounded.TaskAlt
+import androidx.compose.material.icons.rounded.ViewCarousel
+import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -80,7 +99,7 @@ class SettingsActivity : ComponentActivity() {
         setContent { EmberTheme { SettingsScreen(refresh) } }
     }
 
-    override fun onResume() { super.onResume(); refresh++ }
+    override fun onResume() { super.onResume(); refresh++; PillOverlay.emberInFront() }
 
     /** Opens a settings screen, trying each in turn, so a phone without one page still gets somewhere useful. */
     private fun open(vararg intents: Intent) {
@@ -136,8 +155,17 @@ class SettingsActivity : ComponentActivity() {
         val listener = ComponentName(this, EmberNotificationListener::class.java).flattenToString()
         val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-        Scaffold(Modifier.nestedScroll(scroll.nestedScrollConnection), containerColor = MaterialTheme.colorScheme.surface,
-            topBar = { LargeTopAppBar({ Text("Ember") }, scrollBehavior = scroll) }) { padding ->
+        // Your wallpaper behind smoked glass, the same as Home, the drawer and notifications.
+        Scaffold(Modifier.layerBackdrop().nestedScroll(scroll.nestedScrollConnection), containerColor = Color.Transparent,
+            topBar = {
+                LargeTopAppBar({
+                    Column {
+                        Text("Ember", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Settings", style = MaterialTheme.typography.bodyMedium, color = EmberColors.Secondary)
+                    }
+                }, scrollBehavior = scroll, colors = TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Black.copy(alpha = .55f)))
+            }) { padding ->
             Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
@@ -159,8 +187,11 @@ class SettingsActivity : ComponentActivity() {
                     if (animIcons) Choice("Dock icons", styles, iconStyle) { prefs.setIconStyle(it) }
                     Toggle("Home cards come back into place", "The date, Smart Stack and widgets. Off: no animation.", animCards) { prefs.setAnimCards(it) }
                     if (animCards) Choice("Home cards", styles, cardStyle) { prefs.setCardStyle(it) }
+                    // A live preview: it plays whenever a style changes.
+                    if (animIcons || animCards) EntrancePreview(EntranceStyle.entries.getOrElse(iconStyle) { EntranceStyle.SCATTER },
+                        EntranceStyle.entries.getOrElse(cardStyle) { EntranceStyle.FLOAT }, animIcons, animCards)
                     Text("Drop: falls into place and lands with a spring. Scatter: starts scattered and tilted, then falls into line. " +
-                        "Float: rises gently. Pop: grows with a springy pop. Go back to Home to see it.", color = EmberColors.Secondary,
+                        "Float: rises gently. Pop: grows with a springy pop.", color = EmberColors.Secondary,
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                 }
 
@@ -178,6 +209,14 @@ class SettingsActivity : ComponentActivity() {
                     if (light) {
                         Choice("Keep glowing for", listOf(15 to "15 min", 30 to "30 min", 60 to "1 hour", 180 to "3 hours"), lightMinutes) { prefs.setLightMinutes(it) }
                         Choice("Brightness", listOf(0 to "Low", 1 to "Medium", 2 to "High"), lightBrightness) { prefs.setLightBrightness(it) }
+                        val lightShape by prefs.lightShape.collectAsStateWithLifecycle()
+                        val lightPlace by prefs.lightPlace.collectAsStateWithLifecycle()
+                        Choice("Shape", listOf(0 to "Pill", 1 to "Dot", 2 to "Camera ring", 3 to "Edge line"), lightShape) { prefs.setLightShape(it) }
+                        if (lightShape != 2) Choice("Where", listOf(0 to "Top left", 1 to "Top centre", 2 to "Top right", 3 to "Bottom"), lightPlace) { prefs.setLightPlace(it) }
+                        Row_("Preview the light (tap it to close)") {
+                            Light.show(this@SettingsActivity, NotifItem("ember-preview", packageName, "Ember", "Preview", "This is your light",
+                                System.currentTimeMillis(), 0, true, null, null))
+                        }
                         Toggle("Show app icons in the light", "Off: just a coloured light, nothing to read from across the room", lightIcon) { prefs.setLightIcon(it) }
                         Toggle("Cycle app colours", "With several apps waiting, each blink takes the next app's colour", lightCycle) { prefs.setLightCycle(it) }
                         Toggle("Music bars", "Little bouncing bars in the light while something plays", lightMusic) { prefs.setLightMusic(it) }
@@ -251,8 +290,13 @@ class SettingsActivity : ComponentActivity() {
                         androidx.compose.runtime.LaunchedEffect(Unit) { ScreenTime.refresh(this@SettingsActivity) }
                         Text("Set a daily limit and Ember sends one gentle reminder when you pass it.", color = EmberColors.Secondary,
                             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
-                        val shown = (usage.keys.take(10) + limits.keys).distinct()
+                        // The top few apps, and any with a limit; the rest fold away behind "Show all".
+                        var all by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+                        val everything = (usage.keys + limits.keys).distinct()
+                        val shown = if (all) everything else (usage.keys.take(4) + limits.keys).distinct()
                         shown.forEach { pkg -> LimitRow(pkg, usage[pkg] ?: 0L, limits[pkg]) }
+                        if (everything.size > shown.size || all) androidx.compose.material3.TextButton({ all = !all },
+                            Modifier.padding(horizontal = 8.dp)) { Text(if (all) "Show fewer" else "Show all ${everything.size} apps") }
                         if (shown.isEmpty()) Text("No app time recorded yet today.", color = EmberColors.Secondary, modifier = Modifier.padding(16.dp))
                     }
                 }
@@ -319,12 +363,49 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
+    /** Each section's icon, so the long list reads at a glance. */
+    private fun groupIcon(title: String): androidx.compose.ui.graphics.vector.ImageVector = when {
+        title.startsWith("Setup") -> Icons.Rounded.TaskAlt
+        title.startsWith("Notification access") -> Icons.Rounded.Lock
+        title.startsWith("Animations") -> Icons.Rounded.AutoAwesome
+        title.startsWith("Lock screen") -> Icons.Rounded.Lightbulb
+        title.startsWith("Smart Stack") -> Icons.Rounded.ViewCarousel
+        title.startsWith("Wallpaper") -> Icons.Rounded.Wallpaper
+        title.startsWith("Screen time") -> Icons.Rounded.HourglassBottom
+        title.startsWith("Icons") -> Icons.Rounded.Apps
+        title.startsWith("Look") -> Icons.Rounded.Palette
+        title.startsWith("App drawer") -> Icons.Rounded.GridView
+        title.startsWith("Notifications") -> Icons.Rounded.Notifications
+        title.startsWith("Status") -> Icons.Rounded.SignalCellularAlt
+        else -> Icons.Rounded.Info
+    }
+
+    /**
+     * A settings section: an icon and title that fold the section open or closed (only Setup starts open, so the page
+     * is a short, calm list), and the rows on smoked glass, like Home's cards.
+     */
     @Composable
     private fun Group(title: String, content: @Composable () -> Unit) {
-        Column {
-            Text(title, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(start = 8.dp, bottom = 6.dp, top = 8.dp))
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) { Column { content() } }
+        var open by androidx.compose.runtime.saveable.rememberSaveable(title) { androidx.compose.runtime.mutableStateOf(title == "Setup") }
+        val turn by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, label = "chevron")
+        Column(Modifier.fillMaxWidth().glass(androidx.compose.foundation.shape.RoundedCornerShape(24.dp))) {
+            Row(Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                androidx.compose.foundation.layout.Box(Modifier.size(34.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = .16f)), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    Icon(groupIcon(title), null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                }
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(start = 14.dp))
+                Icon(Icons.Rounded.ExpandMore, if (open) "Fold" else "Open", tint = EmberColors.Secondary,
+                    modifier = Modifier.graphicsLayer { rotationZ = turn })
+            }
+            androidx.compose.animation.AnimatedVisibility(open) {
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    content()
+                    androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
+                }
+            }
         }
     }
 
@@ -332,7 +413,7 @@ class SettingsActivity : ComponentActivity() {
     private fun Step(title: String, done: Boolean, detail: String, onClick: () -> Unit) {
         ListItem(
             headlineContent = { Text(title) },
-            supportingContent = { Text(if (done) "On" else detail) },
+            supportingContent = { Text(if (done) "On" else detail, color = EmberColors.Secondary) },
             trailingContent = {
                 if (done) Icon(Icons.Rounded.CheckCircle, "On", tint = Color(0xFF34C759))
                 else Icon(Icons.Rounded.ChevronRight, null)
@@ -348,7 +429,7 @@ class SettingsActivity : ComponentActivity() {
     private fun Toggle(title: String, detail: String?, on: Boolean, onChange: (Boolean) -> Unit) {
         ListItem(
             headlineContent = { Text(title) },
-            supportingContent = if (detail != null) ({ Text(detail) }) else null,
+            supportingContent = if (detail != null) ({ Text(detail, color = EmberColors.Secondary) }) else null,
             trailingContent = { Switch(on, onChange) },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             modifier = Modifier.fillMaxWidth().clickableRow { onChange(!on) },

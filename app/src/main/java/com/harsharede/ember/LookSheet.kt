@@ -1,6 +1,20 @@
 package com.harsharede.ember
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -58,13 +72,33 @@ fun LookSheet(onClose: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         scrimColor = Color.Transparent, containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .96f),
         contentColor = MaterialTheme.colorScheme.onSurface) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp).navigationBarsPadding()) {
+        Column(Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState())
+            .padding(horizontal = 24.dp).padding(bottom = 12.dp).navigationBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Customize look", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 TextButton({
                     prefs.setRailWidth(92); prefs.setDockHeight(1f); prefs.setRailAlpha(.8f); prefs.setCardAlpha(.8f)
-                    prefs.setDockRound(true); prefs.setDockCorner(18)
+                    prefs.setDockRound(true); prefs.setDockCorner(18); prefs.setDateStyle(0); prefs.setClockStyle(0)
                 }) { Text("Reset") }
+            }
+            // Date and clock styles, each with a live preview.
+            val dateStyle by prefs.dateStyle.collectAsStateWithLifecycle()
+            val clockStyle by prefs.clockStyle.collectAsStateWithLifecycle()
+            val now = remember { System.currentTimeMillis() }
+            Text("Date style", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+            Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("Classic", "Big day", "One line", "Compact").forEachIndexed { i, name ->
+                    StylePreview(name, dateStyle == i, { prefs.setDateStyle(i) }) {
+                        Box(Modifier.graphicsLayer { scaleX = .55f; scaleY = .55f; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, .5f) }
+                            .wrapContentWidth(Alignment.Start, unbounded = true)) { DateStyled(now, i) }
+                    }
+                }
+            }
+            Text("Clock style", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("Digital", "Stacked", "12-hour").forEachIndexed { i, name ->
+                    StylePreview(name, clockStyle == i, { prefs.setClockStyle(i) }, width = 96.dp) { RailClock(now, i, 18.sp) }
+                }
             }
             Text("Dock shape", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -142,5 +176,18 @@ private fun SwitchRow(title: String, detail: String, on: Boolean, onChange: (Boo
             Text(detail, style = MaterialTheme.typography.bodyMedium, color = EmberColors.Secondary)
         }
         Switch(on, onChange)
+    }
+}
+
+/** A small tappable preview of one style, outlined in the accent when it's the chosen one. */
+@Composable
+private fun StylePreview(name: String, selected: Boolean, onPick: () -> Unit, width: androidx.compose.ui.unit.Dp = 200.dp,
+                         content: @Composable () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.width(width).height(96.dp).clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = .45f))
+            .border(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = .12f), RoundedCornerShape(18.dp))
+            .clickable(onClick = onPick).padding(10.dp), contentAlignment = Alignment.CenterStart) { content() }
+        Text(name, style = MaterialTheme.typography.labelMedium, color = if (selected) MaterialTheme.colorScheme.primary else EmberColors.Secondary,
+            modifier = Modifier.padding(top = 4.dp))
     }
 }

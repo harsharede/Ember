@@ -7,6 +7,7 @@ import android.hardware.biometrics.BiometricPrompt
 import android.os.CancellationSignal
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -110,6 +111,27 @@ fun FocusSheet(onClose: () -> Unit) {
                 listOf(30 to "30 min", 60 to "1 h", 120 to "2 h", 0 to "Until I end it").forEach { (m, label) ->
                     FilterChip(minutes == m, { minutes = m }, label = { Text(label) })
                 }
+            }
+            // Suggestions from screen time: the apps that took the most of today, not yet chosen.
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val usage by ScreenTime.today.collectAsStateWithLifecycle()
+            androidx.compose.runtime.LaunchedEffect(Unit) { ScreenTime.refresh(context) }
+            val launchable = remember(apps) { apps.map { it.packageName }.toSet() }
+            val suggested = remember(usage, chosen, launchable) {
+                usage.entries.filter { it.key in launchable && it.key !in chosen && it.value >= 15 * 60_000L && !it.key.startsWith("com.android.") }
+                    .take(4)
+            }
+            if (suggested.isNotEmpty()) {
+                Text("Suggested from today's screen time", style = MaterialTheme.typography.titleSmall)
+                Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    suggested.forEach { (pkg, ms) ->
+                        androidx.compose.material3.AssistChip({ prefs.setFocusApp(pkg, true) },
+                            label = { Text("${EmberApp.instance.apps.labelForPackage(pkg)} · ${formatDuration(ms)}") },
+                            leadingIcon = { PackageIcon(pkg, 18.dp) })
+                    }
+                }
+            } else if (!ScreenTime.hasAccess(context)) androidx.compose.material3.TextButton({ runCatching { context.startActivity(ScreenTime.accessIntent()) } }) {
+                Text("Get suggestions from your screen time")
             }
             Text("${chosen.size} apps chosen", style = MaterialTheme.typography.titleSmall)
             LazyColumn(Modifier.heightIn(max = 300.dp)) {

@@ -133,9 +133,11 @@ fun StatusCapsule(
     Column(modifier.glass(shape, alpha).padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Double-tap the time to move the rail to the other edge (the other thumb).
-        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = Color.White, fontSize = timeSize, fontWeight = FontWeight.Bold, maxLines = 1,
-            modifier = if (onFlip == null) Modifier else Modifier.clip(RoundedCornerShape(12.dp))
-                .combinedClickable(onDoubleClick = onFlip, onClick = {}).padding(horizontal = 4.dp))
+        val clockStyle by EmberApp.instance.prefs.clockStyle.collectAsStateWithLifecycle()
+        Box(if (onFlip == null) Modifier else Modifier.clip(RoundedCornerShape(12.dp))
+            .combinedClickable(onDoubleClick = onFlip, onClick = {}).padding(horizontal = 4.dp)) {
+            RailClock(now, clockStyle, timeSize)
+        }
 
         // What's on, and (if chosen) what's off, dimmed, so it can be tapped back on.
         val icons = buildList {
@@ -381,4 +383,23 @@ fun memoryLabel(yearsAgo: Int): String? = when {
     yearsAgo <= 0 -> null
     yearsAgo == 1 -> "1 year ago today"
     else -> "$yearsAgo years ago today"
+}
+
+/** The rail's time in one of three styles (Customize look › Clock style): Digital, Stacked, 12-hour. */
+@Composable
+fun RailClock(now: Long, style: Int, size: androidx.compose.ui.unit.TextUnit) {
+    val date = Date(now)
+    fun f(p: String) = SimpleDateFormat(p, Locale.getDefault()).format(date)
+    when (style) {
+        // Hours over minutes, large: reads at a glance from across the table.
+        1 -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(f("HH"), color = Color.White, fontSize = size * 1.5f, fontWeight = FontWeight.Black, lineHeight = size * 1.5f)
+            Text(f("mm"), color = MaterialTheme.colorScheme.primary, fontSize = size * 1.5f, fontWeight = FontWeight.Black, lineHeight = size * 1.5f)
+        }
+        2 -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(f("h:mm"), color = Color.White, fontSize = size, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(f("a").uppercase(), color = EmberColors.Secondary, fontSize = size * .55f, fontWeight = FontWeight.SemiBold)
+        }
+        else -> Text(f("HH:mm"), color = Color.White, fontSize = size, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
 }

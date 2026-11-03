@@ -98,7 +98,7 @@ class ReviewCleanActivity : ComponentActivity() {
         var keep by remember(photos) { mutableStateOf(emptySet<Long>()) }
         val toTrash = photos.filter { it.first !in keep }
         val photoSelector = remember { packageManager.getLaunchIntentForPackage(PHOTO_SELECTOR) }
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)) {
+        Column(Modifier.fillMaxSize().layerBackdrop().windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)) {
             Text("Review & clean", style = MaterialTheme.typography.headlineMedium)
             Text(if (photos.isEmpty()) "Nothing to clean. Photos you 👎 as wallpaper collect here."
                 else "${photos.size} photos you 👎'd. Tap one to keep it; the rest go to the trash (restorable for 30 days).",

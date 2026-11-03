@@ -420,24 +420,58 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
 
 @Composable
 private fun DateHeader(now: Long) {
-    val date = Date(now)
+    val style by EmberApp.instance.prefs.dateStyle.collectAsStateWithLifecycle()
+    DateStyled(now, style)
+}
+
+/** The next few hours' weather, as icons only, one per hour. */
+@Composable
+private fun WeatherIcons(size: androidx.compose.ui.unit.Dp = 18.dp) {
     val showWeather by EmberApp.instance.prefs.headerWeather.collectAsStateWithLifecycle()
     val weather by WeatherStore.now.collectAsStateWithLifecycle()
+    val next = weather?.next.orEmpty()
+    if (showWeather && next.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        next.take(5).forEach { (code, day) ->
+            androidx.compose.material3.Icon(weatherIcon(code, day), weatherLabel(code), tint = Color.White.copy(alpha = .85f), modifier = Modifier.size(size))
+        }
+    }
+}
+
+/**
+ * The day and date in one of four styles (Customize look › Date style): Classic, Big day (a large day number beside the
+ * weekday and month), One line, and Compact.
+ */
+@Composable
+fun DateStyled(now: Long, style: Int) {
+    val date = Date(now)
+    fun f(p: String) = SimpleDateFormat(p, Locale.getDefault()).format(date)
+    val accent = MaterialTheme.colorScheme.primary
     Column(Modifier.padding(top = 2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(SimpleDateFormat("EEEE", Locale.getDefault()).format(date).uppercase(), color = MaterialTheme.colorScheme.primary,
-                fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            // The next few hours' weather, as icons only, one per hour.
-            val next = weather?.next.orEmpty()
-            if (showWeather && next.isNotEmpty()) Row(Modifier.padding(start = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                next.take(5).forEach { (code, day) ->
-                    androidx.compose.material3.Icon(weatherIcon(code, day), weatherLabel(code), tint = Color.White.copy(alpha = .85f),
-                        modifier = Modifier.size(18.dp))
+        when (style) {
+            1 -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(f("dd"), color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Black, lineHeight = 64.sp)
+                Column(Modifier.padding(start = 12.dp)) {
+                    Text(f("EEEE"), color = accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(f("MMMM yyyy"), color = Color.White.copy(alpha = .85f), fontSize = 16.sp)
+                    Box(Modifier.padding(top = 4.dp)) { WeatherIcons(16.dp) }
                 }
             }
+            2 -> {
+                Text(f("EEEE, d MMMM"), color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                Box(Modifier.padding(top = 6.dp)) { WeatherIcons() }
+            }
+            3 -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(f("EEE · MMM d").uppercase(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                Box(Modifier.padding(start = 12.dp)) { WeatherIcons(16.dp) }
+            }
+            else -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(f("EEEE").uppercase(), color = accent, fontSize = 16.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Box(Modifier.padding(start = 12.dp)) { WeatherIcons() }
+                }
+                Text(f("MMMM d"), color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold, lineHeight = 44.sp)
+            }
         }
-        Text(SimpleDateFormat("MMMM d", Locale.getDefault()).format(date), color = Color.White, fontSize = 40.sp,
-            fontWeight = FontWeight.Bold, lineHeight = 44.sp)
     }
 }
 

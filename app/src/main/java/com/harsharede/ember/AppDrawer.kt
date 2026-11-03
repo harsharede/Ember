@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -130,7 +131,7 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
     }
     LaunchedEffect(query) { if (query.isNotEmpty() && pager.currentPage != 0) pager.scrollToPage(0) }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = .96f))
+    Column(Modifier.fillMaxSize().layerBackdrop()
         .windowInsetsPadding(WindowInsets.safeDrawing).imePadding()
         // The search field and tabs aren't a list, so a drag there moves the drawer directly.
         .then(if (layer != null) Modifier.dragToMove(layer) else Modifier)) {
@@ -163,9 +164,13 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
                     SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
             }
         }
-        HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-            if (page == 0) AlphabeticalApps(apps, query, layer, onLaunch, onAddToDock, lettersLeft)
-            else GroupedApps(apps, layer, onLaunch, onAddToDock)
+        // Same glass as Home's cards (Customize look › Card transparency).
+        val cardAlpha by prefs.cardAlpha.collectAsStateWithLifecycle()
+        androidx.compose.runtime.CompositionLocalProvider(LocalGlassAlpha provides cardAlpha) {
+            HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+                if (page == 0) AlphabeticalApps(apps, query, layer, onLaunch, onAddToDock, lettersLeft)
+                else GroupedApps(apps, layer, onLaunch, onAddToDock)
+            }
         }
     }
     if (showHidden) HiddenAppsSheet(onLaunch = onLaunch, onClose = { showHidden = false })
@@ -184,8 +189,10 @@ private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?,
         grouped.mapValues { (_, list) -> i.also { i += list.size + 1 } }
     }
     LaunchedEffect(query) { listState.scrollToItem(0) }
+    // With the keyboard up there's too little height for 27 letters, and typing is quicker anyway: the strip steps aside.
+    val keyboardUp = WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
     val strip: @Composable () -> Unit = {
-        if (query.isEmpty()) LetterStrip(headingIndex.keys.toList(), onLeft = lettersLeft) { letter ->
+        if (query.isEmpty() && !keyboardUp) LetterStrip(headingIndex.keys.toList(), onLeft = lettersLeft) { letter ->
             headingIndex[letter]?.let { scope.launch { listState.scrollToItem(it) } }
         }
     }
@@ -193,16 +200,17 @@ private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?,
         // The letters sit on the same side as the rail, under the thumb that's using the phone.
         if (lettersLeft) strip()
         LazyColumn(Modifier.weight(1f).fillMaxHeight().then(if (layer != null) Modifier.nestedScroll(layer.closeConnection) else Modifier), state = listState) {
-            // Typing also gives sums, conversions, people and a web search.
-            if (query.isNotBlank()) item(key = "smart") { SmartResults(query) }
+            // Typing also gives quick answers (sums, conversions) first, and people and a web search after the apps.
+            if (query.isNotBlank()) item(key = "answers") { SmartResults(query, SmartPart.ANSWERS) }
             grouped.forEach { (letter, list) ->
                 stickyHeader(key = "h-$letter") {
                     Text(letter, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 15.sp,
-                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLowest).padding(start = 22.dp, top = 10.dp, bottom = 4.dp))
+                        modifier = Modifier.fillMaxWidth().background(HeaderScrim).padding(start = 22.dp, top = 10.dp, bottom = 4.dp))
                 }
                 items(list, key = { it.key }) { app -> DrawerRow(app, onLaunch, onAddToDock) }
             }
             if (visible.isEmpty()) item { Text("No apps match \"$query\"", color = EmberColors.Secondary, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) }
+            if (query.isNotBlank()) item(key = "more") { SmartResults(query, SmartPart.PEOPLE_AND_WEB) }
         }
         if (!lettersLeft) strip()
     }

@@ -343,6 +343,26 @@ class Prefs(context: Context) {
     val headerWeather: StateFlow<Boolean> = _headerWeather.asStateFlow()
     fun setHeaderWeather(on: Boolean) { _headerWeather.value = on; sp.edit().putBoolean(KEY_HEADER_WEATHER, on).apply() }
 
+    // How the date on Home and the time on the rail are drawn.
+    private val _dateStyle = MutableStateFlow(sp.getInt(KEY_DATE_STYLE, 0))
+    /** 0 Classic, 1 Big day, 2 One line, 3 Compact. */
+    val dateStyle: StateFlow<Int> = _dateStyle.asStateFlow()
+    fun setDateStyle(v: Int) { _dateStyle.value = v; sp.edit().putInt(KEY_DATE_STYLE, v).apply() }
+    private val _clockStyle = MutableStateFlow(sp.getInt(KEY_CLOCK_STYLE, 0))
+    /** 0 Digital, 1 Stacked, 2 12-hour. */
+    val clockStyle: StateFlow<Int> = _clockStyle.asStateFlow()
+    fun setClockStyle(v: Int) { _clockStyle.value = v; sp.edit().putInt(KEY_CLOCK_STYLE, v).apply() }
+
+    // The lock-screen light's shape and place.
+    private val _lightShape = MutableStateFlow(sp.getInt(KEY_LIGHT_SHAPE, 0))
+    /** 0 Pill, 1 Dot, 2 Ring around the camera, 3 Edge line. */
+    val lightShape: StateFlow<Int> = _lightShape.asStateFlow()
+    fun setLightShape(v: Int) { _lightShape.value = v; sp.edit().putInt(KEY_LIGHT_SHAPE, v).apply() }
+    private val _lightPlace = MutableStateFlow(sp.getInt(KEY_LIGHT_PLACE, 0))
+    /** 0 Top left, 1 Top centre (by the camera), 2 Top right, 3 Bottom centre. */
+    val lightPlace: StateFlow<Int> = _lightPlace.asStateFlow()
+    fun setLightPlace(v: Int) { _lightPlace.value = v; sp.edit().putInt(KEY_LIGHT_PLACE, v).apply() }
+
     // Which hand: the rail on the right (default) or the left.
     private val _railLeft = MutableStateFlow(sp.getBoolean(KEY_RAIL_LEFT, false))
     /** The rail (status and dock) sits on the left edge, for the left thumb. */
@@ -501,6 +521,10 @@ class Prefs(context: Context) {
         private const val KEY_CARD_ALPHA = "card_alpha"
         private const val KEY_LIGHT = "light"
         private const val KEY_RAIL_LEFT = "rail_left"
+        private const val KEY_DATE_STYLE = "date_style"
+        private const val KEY_CLOCK_STYLE = "clock_style"
+        private const val KEY_LIGHT_SHAPE = "light_shape"
+        private const val KEY_LIGHT_PLACE = "light_place"
         private const val KEY_PHOTO_SOURCE = "photo_source"
         private const val KEY_PHOTO_ALBUMS = "photo_albums"
         private const val KEY_MEMORIES_COPY = "memories_copy"

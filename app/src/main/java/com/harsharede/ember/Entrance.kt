@@ -6,6 +6,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.sin
@@ -97,3 +106,37 @@ fun Modifier.fallIn(entrance: Entrance, index: Int, enabled: Boolean, kind: Entr
             }
         }
     }
+
+/**
+ * A small live preview of the welcome-back animation for Settings: a mini rail of icons and two cards that play the
+ * chosen styles every time a style is picked, or on Replay.
+ */
+@androidx.compose.runtime.Composable
+fun EntrancePreview(iconStyle: EntranceStyle, cardStyle: EntranceStyle, icons: Boolean, cards: Boolean) {
+    val entrance = androidx.compose.runtime.remember { Entrance() }
+    entrance.iconStyle = iconStyle; entrance.cardStyle = cardStyle
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val replay: () -> Unit = { scope.launch { entrance.park(); entrance.play() } }
+    androidx.compose.runtime.LaunchedEffect(iconStyle, cardStyle, icons, cards) { entrance.park(); kotlinx.coroutines.delay(150); entrance.play() }
+    val accent = androidx.compose.material3.MaterialTheme.colorScheme.primary
+    androidx.compose.foundation.layout.Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().height(150.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = .45f)).padding(12.dp)) {
+            androidx.compose.foundation.layout.Column(Modifier.weight(1f), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                repeat(3) { i ->
+                    androidx.compose.foundation.layout.Box(Modifier.fallIn(entrance, i, cards, Entrance.Kind.CARD).fillMaxWidth().height(34.dp)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Color.White.copy(alpha = .12f)))
+                }
+            }
+            androidx.compose.foundation.layout.Column(Modifier.padding(start = 12.dp).width(40.dp).fillMaxHeight()
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(androidx.compose.ui.graphics.Color.White.copy(alpha = .08f)).padding(vertical = 6.dp),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+                repeat(5) { i ->
+                    androidx.compose.foundation.layout.Box(Modifier.fallIn(entrance, i, icons, Entrance.Kind.ICON).size(20.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape).background(accent.copy(alpha = .35f + .13f * i)))
+                }
+            }
+        }
+        androidx.compose.material3.TextButton(replay) { androidx.compose.material3.Text("Replay") }
+    }
+}

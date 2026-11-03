@@ -71,28 +71,46 @@ private val EmberScheme = darkColorScheme(
 fun EmberTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val fromWallpaper by EmberApp.instance.prefs.wallpaperColors.collectAsState()
-    val scheme = if (fromWallpaper) dynamicDarkColorScheme(context) else EmberScheme
+    val base = if (fromWallpaper) dynamicDarkColorScheme(context) else EmberScheme
+    // One glass for everything: every surface (cards, menus, dialogs, sheets, settings) is a near-black smoked glass with a
+    // whisper of the accent, instead of Material's lighter grey-lilac containers, which looked milky over photos.
+    val ink = Color(0xFF0D0E11)
+    fun tone(lift: Float) = androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.lerp(ink, Color.White, lift), base.primary, .05f)
+    val scheme = base.copy(
+        surface = tone(.02f), surfaceDim = tone(.0f), surfaceBright = tone(.10f),
+        surfaceContainerLowest = tone(.0f), surfaceContainerLow = tone(.03f), surfaceContainer = tone(.05f),
+        surfaceContainerHigh = tone(.08f), surfaceContainerHighest = tone(.12f),
+        background = Color.Black, onSurface = Color.White, onSurfaceVariant = Color(0xFFB9BAC2),
+        outline = Color.White.copy(alpha = .22f), outlineVariant = Color.White.copy(alpha = .10f),
+    )
+    val shapes = androidx.compose.material3.Shapes(
+        extraSmall = RoundedCornerShape(14.dp), small = RoundedCornerShape(16.dp), medium = RoundedCornerShape(20.dp),
+        large = RoundedCornerShape(28.dp), extraLarge = RoundedCornerShape(32.dp),
+    )
     // Text with no colour of its own is light on Ember's dark surfaces (it was black, unreadable, outside a Surface).
-    MaterialTheme(colorScheme = scheme) {
+    MaterialTheme(colorScheme = scheme, shapes = shapes) {
         androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides scheme.onSurface, content = content)
     }
 }
 
 /** How solid glass surfaces are; Home sets it from "Card transparency". */
-val LocalGlassAlpha = androidx.compose.runtime.compositionLocalOf { .80f }
+val LocalGlassAlpha = androidx.compose.runtime.compositionLocalOf { .72f }
 
-/** Ember's glass: the scheme's raised surface, a soft top sheen and a lit hairline edge. */
+/**
+ * Ember's glass: smoked, near-black glass (so photos behind stay rich, not washed out), a soft light falling from the
+ * top, and a hairline edge that catches the light on the upper left like real glass.
+ */
 @Composable
 fun Modifier.glass(shape: Shape = RoundedCornerShape(28.dp), alpha: Float = LocalGlassAlpha.current): Modifier {
-    val fill = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = alpha)
+    val fill = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = alpha)
     return this
         .clip(shape)
         .background(fill)
         .drawBehind {
-            drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = .08f), .35f to Color.Transparent, 1f to Color.Transparent))
+            drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = .10f), .3f to Color.White.copy(alpha = .02f), 1f to Color.Transparent))
         }
-        .border(1.dp, Brush.linearGradient(0f to Color.White.copy(alpha = .24f), .5f to Color.White.copy(alpha = .05f),
-            1f to Color.White.copy(alpha = .12f)), shape)
+        .border(1.dp, Brush.linearGradient(0f to Color.White.copy(alpha = .30f), .45f to Color.White.copy(alpha = .06f),
+            1f to Color.White.copy(alpha = .14f)), shape)
 }
 
 @Composable
@@ -150,3 +168,13 @@ private fun sameDay(a: Long, b: Long): Boolean {
     val cb = Calendar.getInstance().apply { timeInMillis = b }
     return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) && ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
 }
+
+/**
+ * Behind full-screen layers (app drawer, notifications, pickers): the wallpaper stays visible, darkened like smoked glass,
+ * so they belong to the same glass as Home instead of being flat panels.
+ */
+fun Modifier.layerBackdrop(): Modifier = this.background(
+    Brush.verticalGradient(0f to Color.Black.copy(alpha = .70f), .5f to Color.Black.copy(alpha = .62f), 1f to Color.Black.copy(alpha = .78f)))
+
+/** Behind sticky headers in those layers: just enough to keep a heading readable over the list scrolling under it. */
+val HeaderScrim = Color.Black.copy(alpha = .55f)

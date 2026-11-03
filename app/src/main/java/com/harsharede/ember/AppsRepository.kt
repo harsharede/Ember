@@ -42,7 +42,7 @@ data class AppEntry(
 class AppsRepository(private val context: Context) {
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val icons = LruCache<String, ImageBitmap>(300)
+    private val icons = LruCache<String, ImageBitmap>(600)
     private val infos = HashMap<String, LauncherActivityInfo>()
 
     private val _iconVersion = MutableStateFlow(0)
@@ -95,14 +95,14 @@ class AppsRepository(private val context: Context) {
 
     /** The app's icon (with the work badge where it applies), loaded once and cached. Call off the main thread. */
     fun icon(app: AppEntry, sizePx: Int): ImageBitmap? {
-        icons.get(app.key)?.let { return it }
+        icons.get("${app.key}@$sizePx")?.let { return it }
         val info = synchronized(infos) { infos[app.key] } ?: return null
         // The icon pack's drawing where it has one (still badged for work apps), else the app's own icon.
         val pack = EmberApp.instance.prefs.iconPack.value
         val fromPack = pack?.let { IconPacks.drawable(context, it, app.component) }
             ?.let { if (app.work) context.packageManager.getUserBadgedIcon(it, app.user) else it }
-        val bitmap = runCatching { (fromPack ?: info.getBadgedIcon(0)).toBitmap(sizePx, sizePx).asImageBitmap() }.getOrNull() ?: return null
-        icons.put(app.key, bitmap)
+        val bitmap = runCatching { (fromPack ?: info.getBadgedIcon(android.util.DisplayMetrics.DENSITY_XXXHIGH)).toBitmap(sizePx, sizePx).asImageBitmap() }.getOrNull() ?: return null
+        icons.put("${app.key}@$sizePx", bitmap)
         return bitmap
     }
 
@@ -110,9 +110,9 @@ class AppsRepository(private val context: Context) {
     fun iconForPackage(packageName: String, sizePx: Int): ImageBitmap? {
         val app = _apps.value.firstOrNull { it.packageName == packageName && !it.work } ?: _apps.value.firstOrNull { it.packageName == packageName }
         if (app != null) return icon(app, sizePx)
-        icons.get("pkg:$packageName")?.let { return it }
+        icons.get("pkg:$packageName@$sizePx")?.let { return it }
         val bitmap = runCatching { context.packageManager.getApplicationIcon(packageName).toBitmap(sizePx, sizePx).asImageBitmap() }.getOrNull() ?: return null
-        icons.put("pkg:$packageName", bitmap)
+        icons.put("pkg:$packageName@$sizePx", bitmap)
         return bitmap
     }
 

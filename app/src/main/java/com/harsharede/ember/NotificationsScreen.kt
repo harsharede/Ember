@@ -62,7 +62,7 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
     val silent = shown.filter { it.silent && !it.persistent }
     val persistent = if (showPersistent || filter != null) shown.filter { it.persistent } else emptyList()
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = .95f))
+    Column(Modifier.fillMaxSize().layerBackdrop()
         .windowInsetsPadding(WindowInsets.safeDrawing).dragToMove(layer)) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Notifications", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -76,6 +76,11 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
             FilterChip(showTodos, { showTodos = true }, label = { Text(if (openTodos > 0) "To-do · $openTodos" else "To-do") })
             if (filter != null && !showTodos) FilterChip(true, { onFilter(null) }, label = { Text("${EmberApp.instance.apps.labelForPackage(filter)}  ✕") },
                 leadingIcon = { PackageIcon(filter, 18.dp) })
+        }
+        // Whatever's playing stays pinned at the top, with its controls, until it stops.
+        val playing by NowPlaying.info.collectAsStateWithLifecycle()
+        playing?.let { info ->
+            Box(Modifier.fillMaxWidth().height(132.dp).padding(horizontal = 12.dp, vertical = 6.dp)) { NowPlayingCard(info) }
         }
         if (showTodos) {
             LazyColumn(Modifier.fillMaxSize().nestedScroll(layer.closeConnection), contentPadding = PaddingValues(12.dp)) {
@@ -118,7 +123,7 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
 @Composable
 private fun SectionHeader(title: String) {
     Text(title, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLowest).padding(start = 8.dp, top = 10.dp, bottom = 4.dp))
+        modifier = Modifier.fillMaxWidth().background(HeaderScrim).padding(start = 8.dp, top = 10.dp, bottom = 4.dp))
 }
 
 @Composable

@@ -54,6 +54,7 @@ class PillOverlay(private val context: Context) {
     }
 
     fun start() {
+        current = this
         context.registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), Context.RECEIVER_EXPORTED)
         scope.launch {
             NotificationStore.arrivals.collect { item ->
@@ -76,6 +77,7 @@ class PillOverlay(private val context: Context) {
     }
 
     fun stop() {
+        if (current === this) current = null
         runCatching { context.unregisterReceiver(screenReceiver) }
         hide()
         scope.cancel()
@@ -83,6 +85,13 @@ class PillOverlay(private val context: Context) {
 
     /** Put the light out without touching the notifications themselves. */
     fun clear() { pending.clear(); hide() }
+
+    companion object {
+        @Volatile var current: PillOverlay? = null
+            private set
+        /** One of Ember's own screens came to the front: the rail and the notification page already show everything. */
+        fun emberInFront() { current?.clear() }
+    }
 
     fun setExpanded(open: Boolean) {
         expanded.value = open

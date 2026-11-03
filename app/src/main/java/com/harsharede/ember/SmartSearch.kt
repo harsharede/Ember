@@ -147,22 +147,33 @@ fun convertUnits(input: String): String? {
 
 private data class Contact(val name: String, val number: String, val photo: ImageBitmap?, val uri: Uri?)
 
-/** The extra rows above app results: a sum, a conversion, matching contacts and a web search. */
+/** Which rows: quick answers go above the apps, people and the web search below them. */
+enum class SmartPart { ANSWERS, PEOPLE_AND_WEB }
+
+/** The extra rows around app results: a sum or a conversion above; matching contacts and a web search below. */
 @Composable
-fun SmartResults(query: String) {
+fun SmartResults(query: String, part: SmartPart) {
     val context = LocalContext.current
     val q = query.trim()
     if (q.isEmpty()) return
     val math = remember(q) { evaluateExpression(q) }
     val conversion = remember(q) { convertUnits(q) }
+    if (part == SmartPart.ANSWERS) {
+        if (math == null && conversion == null) return
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+            math?.let { v -> SmartRow(Icons.Rounded.Calculate, "= ${formatNumber(v)}", "Tap to copy") { copy(context, formatNumber(v)) } }
+            conversion?.let { c -> SmartRow(Icons.Rounded.Straighten, c, "Tap to copy") { copy(context, c.substringAfter("= ")) } }
+        }
+        return
+    }
     var contactsAllowed by remember { mutableStateOf(CardData.granted(context, Manifest.permission.READ_CONTACTS)) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { contactsAllowed = it }
     val contacts by produceState(emptyList<Contact>(), q, contactsAllowed) {
         value = if (!contactsAllowed || q.length < 2 || math != null) emptyList() else withContext(Dispatchers.IO) { findContacts(context, q) }
     }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        math?.let { v -> SmartRow(Icons.Rounded.Calculate, "= ${formatNumber(v)}", "Tap to copy") { copy(context, formatNumber(v)) } }
-        conversion?.let { c -> SmartRow(Icons.Rounded.Straighten, c, "Tap to copy") { copy(context, c.substringAfter("= ")) } }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(top = 8.dp)) {
+        if (contacts.isNotEmpty()) Text("People", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(start = 10.dp, bottom = 2.dp))
         contacts.forEach { c ->
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable {
                 c.uri?.let { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, it).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }

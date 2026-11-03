@@ -71,6 +71,7 @@ class HomeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        PillOverlay.emberInFront()
         Wallpapers.onHomeVisible(this)
         Widgets.nudge(this)
         CardData.refresh(this)

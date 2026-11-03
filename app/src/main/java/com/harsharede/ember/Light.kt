@@ -21,6 +21,9 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -215,7 +218,7 @@ private fun LightScreen(dark: Boolean, onTap: () -> Unit, onSwipeUp: () -> Unit,
     val live by NotificationStore.items.collectAsStateWithLifecycle()
     val playing = NowPlaying.info.collectAsStateWithLifecycle().value?.playing == true
     // Only what's still there: one read on another device or dismissed elsewhere drops out of the light.
-    val items = remember(wanted, live) { val keys = live.associateBy { it.key }; wanted.mapNotNull { keys[it.key] } }
+    val items = remember(wanted, live) { val keys = live.associateBy { it.key }; wanted.mapNotNull { keys[it.key] ?: it.takeIf { w -> w.key == "ember-preview" } } }
     LaunchedEffect(items.isEmpty(), wanted.isEmpty(), charging) { if (items.isEmpty() && !charging && (wanted.isNotEmpty() || !charging)) onDark() }
     LaunchedEffect(minutes) { delay(minutes * 60_000L); onDark() }
 
@@ -253,8 +256,29 @@ private fun LightScreen(dark: Boolean, onTap: () -> Unit, onSwipeUp: () -> Unit,
                 cycle && colors.size > 1 -> Color(colors[turn % colors.size])
                 else -> Color(colors.firstOrNull() ?: fallback)
             }
-            Row(Modifier.align(Alignment.TopStart)
-                .padding(start = 24.dp, top = 14.dp)
+            val shape by prefs.lightShape.collectAsStateWithLifecycle()
+            val place by prefs.lightPlace.collectAsStateWithLifecycle()
+            val where = when (place) { 1 -> Alignment.TopCenter; 2 -> Alignment.TopEnd; 3 -> Alignment.BottomCenter; else -> Alignment.TopStart }
+            val drift = Modifier.offset(x = (shift % 2 * 3).dp, y = (shift / 2 * 3).dp).graphicsLayer { alpha = glow }
+            when (shape) {
+                // A round dot, like an LED.
+                1 -> Box(Modifier.align(where).padding(horizontal = 28.dp, vertical = 18.dp).then(drift).size(14.dp)
+                    .drawBehind {
+                        for (i in 3 downTo 1) drawCircle(color.copy(alpha = .2f / i), radius = size.minDimension / 2 + i * 5.dp.toPx())
+                    }.clip(CircleShape).background(color))
+                // A glowing ring around the front camera.
+                2 -> CameraRing(color, Modifier.graphicsLayer { alpha = glow })
+                // A thin light along the edge.
+                3 -> Box(Modifier.align(if (place == 3) Alignment.BottomCenter else Alignment.TopCenter).padding(vertical = 4.dp)
+                    .graphicsLayer { alpha = glow }.fillMaxWidth(.6f).height(4.dp)
+                    .drawBehind {
+                        for (i in 3 downTo 1) drawRoundRect(color.copy(alpha = .18f / i), topLeft = Offset(0f, -i * 4.dp.toPx()),
+                            size = Size(size.width, size.height + i * 8.dp.toPx()), cornerRadius = CornerRadius(size.height + i * 4.dp.toPx()))
+                    }.clip(RoundedCornerShape(50)).background(color))
+                else -> Unit
+            }
+            if (shape == 0) Row(Modifier.align(where)
+                .padding(horizontal = 24.dp, vertical = 14.dp)
                 .offset(x = (shift % 2 * 3).dp, y = (shift / 2 * 3).dp)
                 .graphicsLayer { alpha = glow }
                 .drawBehind {
@@ -288,5 +312,22 @@ private fun MusicBars() {
             val h = .3f + .7f * ((kotlin.math.sin((t + phase) * 2 * Math.PI).toFloat() + 1f) / 2f)
             Box(Modifier.padding(horizontal = 1.dp).width(2.dp).height((12 * h).dp).background(Color.Black.copy(alpha = .8f), RoundedCornerShape(1.dp)))
         }
+    }
+}
+
+/** A glowing ring drawn around the front camera's hole, found from the display cutout (top centre if there's none). */
+@Composable
+private fun CameraRing(color: Color, modifier: Modifier) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    val hole = remember(view) {
+        view.rootWindowInsets?.displayCutout?.boundingRects?.minByOrNull { it.top }
+    }
+    androidx.compose.foundation.Canvas(modifier.fillMaxSize()) {
+        val cx = hole?.exactCenterX() ?: (size.width / 2)
+        val cy = hole?.exactCenterY() ?: 40.dp.toPx()
+        val r = (hole?.let { maxOf(it.width(), it.height()) / 2f } ?: 14.dp.toPx()) + 6.dp.toPx()
+        for (i in 3 downTo 1) drawCircle(color.copy(alpha = .16f / i), radius = r + i * 4.dp.toPx(), center = Offset(cx, cy),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6.dp.toPx()))
+        drawCircle(color, radius = r, center = Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx()))
     }
 }

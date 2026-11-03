@@ -67,6 +67,7 @@
             android:name=".SettingsActivity"
             android:exported="true"
             android:label="@string/settings_title"
+            android:theme="@style/Theme.Ember.Home"
             android:taskAffinity="com.harsharede.ember.settings">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -90,6 +91,7 @@
             android:name=".ReviewCleanActivity"
             android:exported="false"
             android:label="Review &amp; clean"
+            android:theme="@style/Theme.Ember.Home"
             android:taskAffinity="com.harsharede.ember.settings" />
 
         <!-- Receives an AI's grouping of the user's apps, shared back from the AI app. Switched on only while Ember is
