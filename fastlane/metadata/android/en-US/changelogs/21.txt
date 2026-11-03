@@ -1,0 +1,3 @@
+• Home fades out fully behind the drawer, notifications and pickers
+• Clearer light settings (shape and place)
+• Up next fits its events

@@ -205,14 +205,14 @@ class SettingsActivity : ComponentActivity() {
 
                 Group("Lock screen light") {
                     Toggle("Notification light", "When something arrives with the screen off, the screen wakes black with only a " +
-                        "glowing pill at the top left. Tap to see the lock screen, swipe up to unlock into your notifications.", light) { prefs.setLight(it) }
+                        "small glowing light (shape and place below). Tap to see the lock screen, swipe up to unlock into your notifications.", light) { prefs.setLight(it) }
                     if (light) {
                         Choice("Keep glowing for", listOf(15 to "15 min", 30 to "30 min", 60 to "1 hour", 180 to "3 hours"), lightMinutes) { prefs.setLightMinutes(it) }
                         Choice("Brightness", listOf(0 to "Low", 1 to "Medium", 2 to "High"), lightBrightness) { prefs.setLightBrightness(it) }
                         val lightShape by prefs.lightShape.collectAsStateWithLifecycle()
                         val lightPlace by prefs.lightPlace.collectAsStateWithLifecycle()
-                        Choice("Shape", listOf(0 to "Pill", 1 to "Dot", 2 to "Camera ring", 3 to "Edge line"), lightShape) { prefs.setLightShape(it) }
-                        if (lightShape != 2) Choice("Where", listOf(0 to "Top left", 1 to "Top centre", 2 to "Top right", 3 to "Bottom"), lightPlace) { prefs.setLightPlace(it) }
+                        Choice("Shape", listOf(0 to "Pill", 1 to "Dot", 2 to "Ring", 3 to "Line"), lightShape) { prefs.setLightShape(it) }
+                        if (lightShape != 2) Choice("Where", listOf(0 to "Left", 1 to "Centre", 2 to "Right", 3 to "Bottom"), lightPlace) { prefs.setLightPlace(it) }
                         Row_("Preview the light (tap it to close)") {
                             Light.show(this@SettingsActivity, NotifItem("ember-preview", packageName, "Ember", "Preview", "This is your light",
                                 System.currentTimeMillis(), 0, true, null, null))
