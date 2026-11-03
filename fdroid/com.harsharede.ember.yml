@@ -15,14 +15,14 @@ RepoType: git
 Repo: https://github.com/harsharede/Ember.git
 
 Builds:
-  - versionName: 1.2.2
-    versionCode: 22
-    commit: v1.2.2
+  - versionName: 1.2.3
+    versionCode: 23
+    commit: v1.2.3
     subdir: app
     gradle:
       - yes
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.2.2
-CurrentVersionCode: 22
+CurrentVersion: 1.2.3
+CurrentVersionCode: 23

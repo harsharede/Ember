@@ -39,6 +39,7 @@ class EmberNotificationListener : NotificationListenerService() {
         val list = runCatching { activeNotifications }.getOrNull().orEmpty()
             .mapNotNull { it.toItem(packageName, apps::labelForPackage, rankingFor(it.key, map)) }
         NotificationStore.replaceAll(list)
+        runCatching { activeNotifications }.getOrNull().orEmpty().forEach { sbn -> sbn.notification.mediaToken()?.let { NowPlaying.offer(this, it) } }
         runCatching { activeNotifications }.getOrNull().orEmpty().sortedBy { it.postTime }.forEach { sbn ->
             list.firstOrNull { it.key == sbn.key }?.let { item -> runCatching { Feeds.record(this, sbn, item) } }
         }
@@ -53,6 +54,8 @@ class EmberNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) {
+        // A player's notification (playing ones are foreground services and aren't listed) still feeds the pinned player.
+        if (sbn.packageName != packageName) sbn.notification.mediaToken()?.let { runCatching { NowPlaying.offer(this, it) } }
         val ranking = rankingFor(sbn.key, rankingMap)
         val item = sbn.toItem(packageName, EmberApp.instance.apps::labelForPackage, ranking)
         if (item == null) { NotificationStore.remove(sbn.key); return }

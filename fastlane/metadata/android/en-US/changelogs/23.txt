@@ -1,0 +1,3 @@
+- Media controls on the notification page now work with more apps: the player is found through its notification too, and stays when an app leaves the title empty.
+- A paused player's notification has its own play, pause and skip buttons.
+- Wording: the notification light is called the light everywhere.

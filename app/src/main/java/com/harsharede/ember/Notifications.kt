@@ -34,6 +34,8 @@ data class NotifItem(
     val channelId: String? = null,
     /** Low-importance ("silent") notifications: listed, but they don't count on the rail or light the pill. */
     val silent: Boolean = false,
+    /** A player's notification (paused music, a podcast): its media session, for play/pause/skip on the card. */
+    val media: android.media.session.MediaSession.Token? = null,
 ) {
     /** Can't be swiped away: system notices and apps' "always on" ones. Kept in their own section. */
     val persistent: Boolean get() = !clearable
@@ -131,8 +133,14 @@ internal fun StatusBarNotification.toItem(selfPackage: String, label: (String) -
         postTime = postTime, color = n.color, clearable = isClearable,
         contentIntent = n.contentIntent, reply = reply,
         channelId = n.channelId, silent = importance < NotificationManager.IMPORTANCE_DEFAULT,
+        media = n.mediaToken(),
     )
 }
+
+/** The media session a player's notification points at, if it's one. */
+internal fun Notification.mediaToken(): android.media.session.MediaSession.Token? =
+    if (Build.VERSION.SDK_INT >= 33) extras.getParcelable(Notification.EXTRA_MEDIA_SESSION, android.media.session.MediaSession.Token::class.java)
+    else @Suppress("DEPRECATION") (extras.getParcelable(Notification.EXTRA_MEDIA_SESSION) as? android.media.session.MediaSession.Token)
 
 /** Android's settings page for one channel of one app, where a notification that can't be dismissed can be turned off. */
 fun channelSettingsIntent(item: NotifItem): Intent =

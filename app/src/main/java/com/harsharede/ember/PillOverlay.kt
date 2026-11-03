@@ -140,7 +140,7 @@ class PillOverlay(private val context: Context) {
         // Allowed into the status bar strip, beside the camera, where an old phone's notification light sat.
         layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-        title = "Ember pill"
+        title = "Ember light"
     }
 
     private class OverlayRoot(context: Context, val onOutside: () -> Unit, val onBack: () -> Boolean) : FrameLayout(context) {

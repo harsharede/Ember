@@ -512,7 +512,7 @@ private fun AccessCard() {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth().glass().clickable { context.startActivity(Intent(context, SettingsActivity::class.java)) }.padding(16.dp)) {
         Text("Finish setting up Ember", style = MaterialTheme.typography.titleSmall)
-        Text("Allow notification access for the rail, the notification page and the glowing pill.", color = EmberColors.Secondary,
+        Text("Allow notification access for the rail, the notification page and the notification light.", color = EmberColors.Secondary,
             fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }

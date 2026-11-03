@@ -171,12 +171,12 @@ class SettingsActivity : ComponentActivity() {
 
                 Group("Setup") {
                     Step("Use Ember as your Home app", isHome, "Choose Ember on the next screen.") { requestHome() }
-                    Step("Notification access", hasAccess, "For the count, the notification page, reply, reminders and the pill.") {
+                    Step("Notification access", hasAccess, "For the count, the notification page, reply, reminders and the light.") {
                         open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
                             .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, listener),
                             Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     }
-                    Step("Display over other apps", canOverlay, "So the pill can glow while you use other apps.") {
+                    Step("Display over other apps", canOverlay, "So the light can glow while you use other apps.") {
                         open(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")),
                             Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
                     }

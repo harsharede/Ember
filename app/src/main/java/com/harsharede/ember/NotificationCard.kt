@@ -23,6 +23,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.NotificationsPaused
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.AddTask
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -88,7 +92,10 @@ fun NotificationCard(item: NotifItem, now: Long, modifier: Modifier = Modifier, 
             maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp, end = 8.dp))
         if (replying && item.reply != null) {
             ReplyField(item, onSent = { replying = false; onDone() })
-        } else Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        } else Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            // A player's notification: its own play/pause and skip, first.
+            item.media?.let { token -> MediaButtons(token) }
             if (item.reply != null) ActionChip(Icons.AutoMirrored.Rounded.Reply, "Reply") { replying = true }
             // Keep it as a to-do: it stays in the list after the notification is gone.
             ActionChip(Icons.Rounded.AddTask, "To-do") {
@@ -138,6 +145,35 @@ private fun ReplyField(item: NotifItem, onSent: () -> Unit) {
         IconButton(::send, Modifier.padding(start = 4.dp).clip(CircleShape).background(EmberColors.Ember)) {
             Icon(Icons.AutoMirrored.Rounded.Send, "Send", tint = MaterialTheme.colorScheme.onPrimary)
         }
+    }
+}
+
+/** Previous, play/pause and next for a player's notification, following the player's own state. */
+@Composable
+private fun MediaButtons(token: android.media.session.MediaSession.Token) {
+    val context = LocalContext.current
+    val controller = remember(token) { runCatching { android.media.session.MediaController(context.applicationContext, token) }.getOrNull() } ?: return
+    var playing by remember(token) { mutableStateOf(controller.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING) }
+    androidx.compose.runtime.DisposableEffect(controller) {
+        val callback = object : android.media.session.MediaController.Callback() {
+            override fun onPlaybackStateChanged(state: android.media.session.PlaybackState?) {
+                playing = state?.state == android.media.session.PlaybackState.STATE_PLAYING
+            }
+        }
+        controller.registerCallback(callback, android.os.Handler(android.os.Looper.getMainLooper()))
+        onDispose { controller.unregisterCallback(callback) }
+    }
+    val controls = controller.transportControls
+    IconButton({ controls.skipToPrevious() }, Modifier.size(40.dp)) {
+        Icon(Icons.Rounded.SkipPrevious, "Previous", tint = EmberColors.EmberSoft)
+    }
+    IconButton({ if (playing) controls.pause() else controls.play() },
+        Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)) {
+        Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play",
+            tint = MaterialTheme.colorScheme.onPrimary)
+    }
+    IconButton({ controls.skipToNext() }, Modifier.size(40.dp)) {
+        Icon(Icons.Rounded.SkipNext, "Next", tint = EmberColors.EmberSoft)
     }
 }
 

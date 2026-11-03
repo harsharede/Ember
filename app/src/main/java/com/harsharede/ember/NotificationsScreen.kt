@@ -57,7 +57,11 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
     var silentOpen by remember { mutableStateOf(false) }
     var persistentOpen by remember { mutableStateOf(false) }
     var showTodos by remember { mutableStateOf(false) }
-    val shown = if (filter == null) items else items.filter { it.packageName == filter }
+    val playing by NowPlaying.info.collectAsStateWithLifecycle()
+    // The player that's pinned at the top isn't listed a second time.
+    val pinnedToken = playing?.controller?.sessionToken
+    val shown = (if (filter == null) items else items.filter { it.packageName == filter })
+        .filter { pinnedToken == null || it.media != pinnedToken }
     val main = shown.filter { !it.silent && !it.persistent }
     val silent = shown.filter { it.silent && !it.persistent }
     val persistent = if (showPersistent || filter != null) shown.filter { it.persistent } else emptyList()
@@ -78,7 +82,6 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
                 leadingIcon = { PackageIcon(filter, 18.dp) })
         }
         // Whatever's playing stays pinned at the top, with its controls, until it stops.
-        val playing by NowPlaying.info.collectAsStateWithLifecycle()
         playing?.let { info ->
             Box(Modifier.fillMaxWidth().height(88.dp).padding(horizontal = 12.dp, vertical = 6.dp)) { NowPlayingCard(info) }
         }
@@ -92,7 +95,7 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
         when {
             !connected -> Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
                 Text("Ember needs notification access", style = MaterialTheme.typography.titleLarge)
-                Text("To list your notifications, reply, set reminders and light the pill. Nothing leaves your phone.",
+                Text("To list your notifications, reply, set reminders and show the light. Nothing leaves your phone.",
                     color = EmberColors.Secondary, modifier = Modifier.padding(top = 8.dp, bottom = 16.dp))
                 Button({ context.startActivity(Intent(context, SettingsActivity::class.java)) }) { Text("Set up") }
             }
