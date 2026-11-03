@@ -60,6 +60,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    // No Google-encrypted dependency list in the APK (F-Droid and IzzyOnDroid reject it; it only serves the Play Store).
+    dependenciesInfo { includeInApk = false; includeInBundle = false }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 
