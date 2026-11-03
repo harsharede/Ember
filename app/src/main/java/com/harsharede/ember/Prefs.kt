@@ -343,6 +343,61 @@ class Prefs(context: Context) {
     val headerWeather: StateFlow<Boolean> = _headerWeather.asStateFlow()
     fun setHeaderWeather(on: Boolean) { _headerWeather.value = on; sp.edit().putBoolean(KEY_HEADER_WEATHER, on).apply() }
 
+    // Which hand: the rail on the right (default) or the left.
+    private val _railLeft = MutableStateFlow(sp.getBoolean(KEY_RAIL_LEFT, false))
+    /** The rail (status and dock) sits on the left edge, for the left thumb. */
+    val railLeft: StateFlow<Boolean> = _railLeft.asStateFlow()
+    fun setRailLeft(on: Boolean) { _railLeft.value = on; sp.edit().putBoolean(KEY_RAIL_LEFT, on).apply() }
+
+    // Where wallpaper photos come from, and what a like does.
+    private val _photoSource = MutableStateFlow(sp.getInt(KEY_PHOTO_SOURCE, PHOTOS_ALL))
+    /** [PHOTOS_ALL], [PHOTOS_ALBUMS] or [PHOTOS_FAVOURITES]. */
+    val photoSource: StateFlow<Int> = _photoSource.asStateFlow()
+    fun setPhotoSource(v: Int) { _photoSource.value = v; sp.edit().putInt(KEY_PHOTO_SOURCE, v).apply() }
+    private val _photoAlbums = MutableStateFlow(sp.getStringSet(KEY_PHOTO_ALBUMS, emptySet())!!.toSet())
+    /** The albums (folder names) chosen for [PHOTOS_ALBUMS]. */
+    val photoAlbums: StateFlow<Set<String>> = _photoAlbums.asStateFlow()
+    fun setPhotoAlbum(name: String, on: Boolean) {
+        val set = if (on) _photoAlbums.value + name else _photoAlbums.value - name
+        _photoAlbums.value = set; sp.edit().putStringSet(KEY_PHOTO_ALBUMS, set).apply()
+    }
+    private val _memoriesCopy = MutableStateFlow(sp.getBoolean(KEY_MEMORIES_COPY, true))
+    /** Liking a wallpaper photo copies it to Pictures/Ember Memories. */
+    val memoriesCopy: StateFlow<Boolean> = _memoriesCopy.asStateFlow()
+    fun setMemoriesCopy(on: Boolean) { _memoriesCopy.value = on; sp.edit().putBoolean(KEY_MEMORIES_COPY, on).apply() }
+    /** Photos already copied to Ember Memories, so a second like doesn't copy again. */
+    fun memoryCopied(id: Long) = sp.getStringSet(KEY_MEMORIES_DONE, emptySet())!!.contains(id.toString())
+    fun markMemoryCopied(id: Long) {
+        sp.edit().putStringSet(KEY_MEMORIES_DONE, sp.getStringSet(KEY_MEMORIES_DONE, emptySet())!! + id.toString()).apply()
+    }
+    /** Forget photos that were trashed in Review & clean. */
+    fun forgetDisliked(ids: Collection<Long>) = saveIds(KEY_WP_DISLIKED, _disliked, _disliked.value - ids.toSet())
+
+    // To-do: notifications kept as things to do later.
+    data class Todo(val id: Long, val packageName: String, val title: String, val text: String, val time: Long, val done: Boolean)
+    private val _todos = MutableStateFlow(readTodos())
+    /** Newest first; done ones stay until cleared. */
+    val todos: StateFlow<List<Todo>> = _todos.asStateFlow()
+    fun addTodo(pkg: String, title: String, text: String, time: Long = System.currentTimeMillis()): Todo {
+        val todo = Todo(System.nanoTime(), pkg, title, text, time, false)
+        saveTodos(listOf(todo) + _todos.value)
+        return todo
+    }
+    fun setTodoDone(id: Long, done: Boolean) = saveTodos(_todos.value.map { if (it.id == id) it.copy(done = done) else it })
+    fun removeTodo(id: Long) = saveTodos(_todos.value.filter { it.id != id })
+    fun clearDoneTodos() = saveTodos(_todos.value.filter { !it.done })
+    private fun clean(s: String) = s.replace(SEP, " ").replace(FIELD, " ")
+    private fun saveTodos(list: List<Todo>) {
+        _todos.value = list
+        sp.edit().putString(KEY_TODOS, list.joinToString(SEP) {
+            listOf(it.id, it.packageName, clean(it.title), clean(it.text), it.time, if (it.done) 1 else 0).joinToString(FIELD)
+        }).apply()
+    }
+    private fun readTodos(): List<Todo> = sp.getString(KEY_TODOS, null).orEmpty().split(SEP).mapNotNull { line ->
+        val p = line.split(FIELD)
+        if (p.size != 6) null else Todo(p[0].toLongOrNull() ?: return@mapNotNull null, p[1], p[2], p[3], p[4].toLongOrNull() ?: 0L, p[5] == "1")
+    }
+
     fun setLight(on: Boolean) { _light.value = on; sp.edit().putBoolean(KEY_LIGHT, on).apply() }
     fun setLightMinutes(m: Int) { _lightMinutes.value = m; sp.edit().putInt(KEY_LIGHT_MINUTES, m).apply() }
     fun setLightIcon(on: Boolean) { _lightIcon.value = on; sp.edit().putBoolean(KEY_LIGHT_ICON, on).apply() }
@@ -445,6 +500,15 @@ class Prefs(context: Context) {
         private const val KEY_RAIL_ALPHA = "rail_alpha"
         private const val KEY_CARD_ALPHA = "card_alpha"
         private const val KEY_LIGHT = "light"
+        private const val KEY_RAIL_LEFT = "rail_left"
+        private const val KEY_PHOTO_SOURCE = "photo_source"
+        private const val KEY_PHOTO_ALBUMS = "photo_albums"
+        private const val KEY_MEMORIES_COPY = "memories_copy"
+        private const val KEY_MEMORIES_DONE = "memories_done"
+        private const val KEY_TODOS = "todos"
+        const val PHOTOS_ALL = 0
+        const val PHOTOS_ALBUMS = 1
+        const val PHOTOS_FAVOURITES = 2
         private const val KEY_STATUS_OFF = "status_show_off"
         private const val KEY_HEADER_WEATHER = "header_weather"
         private const val KEY_HIDDEN_APPS = "hidden_apps"

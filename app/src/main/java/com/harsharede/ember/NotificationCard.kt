@@ -22,6 +22,9 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.NotificationsPaused
 import androidx.compose.material.icons.rounded.NotificationsOff
+import androidx.compose.material.icons.rounded.AddTask
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,8 +88,14 @@ fun NotificationCard(item: NotifItem, now: Long, modifier: Modifier = Modifier, 
             maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp, end = 8.dp))
         if (replying && item.reply != null) {
             ReplyField(item, onSent = { replying = false; onDone() })
-        } else Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        } else Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (item.reply != null) ActionChip(Icons.AutoMirrored.Rounded.Reply, "Reply") { replying = true }
+            // Keep it as a to-do: it stays in the list after the notification is gone.
+            ActionChip(Icons.Rounded.AddTask, "To-do") {
+                Todos.add(item)
+                Toast.makeText(context, "Added to your to-do list", Toast.LENGTH_SHORT).show()
+                onDone()
+            }
             Box {
                 ActionChip(Icons.Rounded.NotificationsPaused, "Remind me") { snoozeOpen = true }
                 DropdownMenu(snoozeOpen, { snoozeOpen = false }) {

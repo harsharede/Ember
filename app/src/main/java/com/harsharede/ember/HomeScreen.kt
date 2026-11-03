@@ -17,6 +17,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -121,6 +122,8 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
     val dockHeight by app.prefs.dockHeight.collectAsStateWithLifecycle()
     val railAlpha by app.prefs.railAlpha.collectAsStateWithLifecycle()
     val cardAlpha by app.prefs.cardAlpha.collectAsStateWithLifecycle()
+    val railLeft by app.prefs.railLeft.collectAsStateWithLifecycle()
+    var railDrag by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val dockRound by app.prefs.dockRound.collectAsStateWithLifecycle()
     val dockCorner by app.prefs.dockCorner.collectAsStateWithLifecycle()
     // Round: pill-shaped ends. Otherwise a rectangle with the chosen corners.
@@ -256,8 +259,9 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             }
             .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = { menu = true }, onClick = {})) {
             CompositionLocalProvider(LocalGlassAlpha provides cardAlpha) {
-            Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 16.dp, end = 10.dp, top = 6.dp)) {
-                BoxWithConstraints(Modifier.weight(1f).padding(end = 12.dp)) {
+            // The pages and the rail are laid out in either order: rail on the right for the right thumb, on the left for the left.
+            val pagesBlock: @Composable RowScope.() -> Unit = {
+                BoxWithConstraints(Modifier.weight(1f).padding(start = if (railLeft) 12.dp else 0.dp, end = if (railLeft) 0.dp else 12.dp)) {
                     val columnWidth = maxWidth.value.toInt()
                     // Swipe sideways for more pages; the rail stays where it is.
                     HorizontalPager(homePager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, pageSpacing = 24.dp) { page ->
@@ -304,22 +308,42 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
                         }
                     }
                 }
+            }
                 // The rail: status on top, then the dock taking the room that's left (up to the height chosen in Customize
                 // look). When the capsule grows, the dock gets shorter and scrolls, with an arrow saying there's more.
+                // Drag it sideways across the screen (or double-tap the time) to move it to the other edge.
+            val railBlock: @Composable RowScope.() -> Unit = {
                 BoxWithConstraints(Modifier.width(railWidth.dp).fillMaxHeight().padding(bottom = 8.dp)
-                    .graphicsLayer { alpha = 1f - clean() }.then(if (cleanNow) Modifier.blockTouches() else Modifier)) {
+                    .graphicsLayer { alpha = 1f - clean(); translationX = railDrag }
+                    .pointerInput(railLeft) {
+                        val flipAt = size.width * 1.2f
+                        detectHorizontalDragGestures(onDragEnd = {
+                            if ((railLeft && railDrag > flipAt) || (!railLeft && railDrag < -flipAt)) app.prefs.setRailLeft(!railLeft)
+                            railDrag = 0f
+                        }, onDragCancel = { railDrag = 0f }) { change, amount ->
+                            change.consume()
+                            // Only towards the other edge, and with a little resistance.
+                            railDrag = if (railLeft) (railDrag + amount).coerceAtLeast(0f) else (railDrag + amount).coerceAtMost(0f)
+                        }
+                    }
+                    .then(if (cleanNow) Modifier.blockTouches() else Modifier)) {
                     val railHeight = maxHeight
                     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha, shape = railShape, widthDp = railWidth) { pkg -> notificationFilter = pkg; notes.show() }
+                        StatusCapsule(status, now, counted, hidden, Modifier.fillMaxWidth(), alpha = railAlpha, shape = railShape, widthDp = railWidth,
+                            onFlip = { app.prefs.setRailLeft(!railLeft) }) { pkg -> notificationFilter = pkg; notes.show() }
                         DockColumn(dock, Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = railHeight * dockHeight),
                             iconSize = (railWidth * .57f).dp, alpha = railAlpha, entrance = entrance, animate = iconsFall, shape = railShape,
                             onLaunch = launch, onChoose = { pickDockSlot = it })
                     }
                 }
             }
+            Row(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(start = if (railLeft) 10.dp else 16.dp, end = if (railLeft) 16.dp else 10.dp, top = 6.dp)) {
+                if (railLeft) { railBlock(); pagesBlock() } else { pagesBlock(); railBlock() }
+            }
             }
             // Page dots, when there's more than one page. Tap one to go there.
-            if (totalPages > 1 && !cleanNow) Row(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 40.dp, end = railWidth.dp)
+            if (totalPages > 1 && !cleanNow) Row(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(bottom = 40.dp, start = if (railLeft) railWidth.dp else 0.dp, end = if (railLeft) 0.dp else railWidth.dp)
                 .graphicsLayer { alpha = 1f - clean() }) {
                 repeat(totalPages) { i ->
                     val selected = i == homePager.currentPage
@@ -354,8 +378,10 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             }
             // The wallpaper control: tiny, bottom-left, opening upwards. Last, so it sits above everything else on Home
             // (the drawer handle used to cover its buttons).
-            if (wallpaperCard && !cleanNow) WallpaperMini(Modifier.align(Alignment.BottomStart).windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(start = 14.dp, bottom = 10.dp).graphicsLayer { alpha = 1f - clean() })
+            // It sits in the corner away from the rail.
+            if (wallpaperCard && !cleanNow) WallpaperMini(Modifier.align(if (railLeft) Alignment.BottomEnd else Alignment.BottomStart)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(start = 14.dp, end = 14.dp, bottom = 10.dp).graphicsLayer { alpha = 1f - clean() }, alignEnd = railLeft)
         }
 
         // The layers stay composed, parked off screen, so they open on the first frame of a swipe with nothing to build.
@@ -369,7 +395,7 @@ fun HomeScreen(requests: HomeRequests, onAddWidget: (android.appwidget.AppWidget
             translationY = (1f - drawer.progress) * size.height
             alpha = if (drawer.progress == 0f) 0f else 1f
         }) {
-            AppDrawer(apps, open = drawerOpen, layer = drawer, onLaunch = launch, onAddToDock = addToDock, onClose = { drawer.hide() })
+            AppDrawer(apps, open = drawerOpen, layer = drawer, onLaunch = launch, onAddToDock = addToDock, onClose = { drawer.hide() }, lettersLeft = railLeft)
         }
         val slot = pickDockSlot
         AnimatedVisibility(slot != null, enter = fadeIn(), exit = fadeOut()) {

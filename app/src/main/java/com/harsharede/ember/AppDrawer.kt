@@ -111,7 +111,7 @@ fun drawerMatches(label: String, query: String): Boolean {
  */
 @Composable
 fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit,
-              title: String? = null, onClose: () -> Unit) {
+              title: String? = null, onClose: () -> Unit, lettersLeft: Boolean = false) {
     val prefs = EmberApp.instance.prefs
     val context = androidx.compose.ui.platform.LocalContext.current
     val autoKeyboard by prefs.drawerKeyboard.collectAsStateWithLifecycle()
@@ -164,7 +164,7 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
             }
         }
         HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-            if (page == 0) AlphabeticalApps(apps, query, layer, onLaunch, onAddToDock)
+            if (page == 0) AlphabeticalApps(apps, query, layer, onLaunch, onAddToDock, lettersLeft)
             else GroupedApps(apps, layer, onLaunch, onAddToDock)
         }
     }
@@ -172,7 +172,8 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
 }
 
 @Composable
-private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
+private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit,
+                             lettersLeft: Boolean = false) {
     val visible = remember(apps, query) { apps.filter { drawerMatches(it.label, query) } }
     val grouped = remember(visible) { visible.groupBy { drawerLetter(it.label) }.toSortedMap(compareBy<String> { it == "#" }.thenBy { it }) }
     val listState = rememberLazyListState()
@@ -183,7 +184,14 @@ private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?,
         grouped.mapValues { (_, list) -> i.also { i += list.size + 1 } }
     }
     LaunchedEffect(query) { listState.scrollToItem(0) }
+    val strip: @Composable () -> Unit = {
+        if (query.isEmpty()) LetterStrip(headingIndex.keys.toList(), onLeft = lettersLeft) { letter ->
+            headingIndex[letter]?.let { scope.launch { listState.scrollToItem(it) } }
+        }
+    }
     Row(Modifier.fillMaxSize()) {
+        // The letters sit on the same side as the rail, under the thumb that's using the phone.
+        if (lettersLeft) strip()
         LazyColumn(Modifier.weight(1f).fillMaxHeight().then(if (layer != null) Modifier.nestedScroll(layer.closeConnection) else Modifier), state = listState) {
             // Typing also gives sums, conversions, people and a web search.
             if (query.isNotBlank()) item(key = "smart") { SmartResults(query) }
@@ -196,9 +204,7 @@ private fun AlphabeticalApps(apps: List<AppEntry>, query: String, layer: Layer?,
             }
             if (visible.isEmpty()) item { Text("No apps match \"$query\"", color = EmberColors.Secondary, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) }
         }
-        if (query.isEmpty()) LetterStrip(headingIndex.keys.toList()) { letter ->
-            headingIndex[letter]?.let { scope.launch { listState.scrollToItem(it) } }
-        }
+        if (!lettersLeft) strip()
     }
 }
 
@@ -366,7 +372,7 @@ private fun GridApp(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (A
  * and lean out like a wave, a large bubble shows the letter, and each new letter gives a light tick.
  */
 @Composable
-private fun LetterStrip(letters: List<String>, onLetter: (String) -> Unit) {
+private fun LetterStrip(letters: List<String>, onLeft: Boolean = false, onLetter: (String) -> Unit) {
     if (letters.size < 2) return
     var height by remember { mutableStateOf(1) }
     var last by remember { mutableStateOf("") }
@@ -402,7 +408,7 @@ private fun LetterStrip(letters: List<String>, onLetter: (String) -> Unit) {
                             val d = (y - (i + .5f) * slot) / slot
                             val wave = kotlin.math.exp(-(d * d) / (2f * 1.8f * 1.8f))
                             scaleX = 1f + 1.4f * wave; scaleY = scaleX
-                            translationX = -wave * 30.dp.toPx()
+                            translationX = (if (onLeft) 1f else -1f) * wave * 30.dp.toPx()
                         })
                 }
             }
@@ -410,7 +416,7 @@ private fun LetterStrip(letters: List<String>, onLetter: (String) -> Unit) {
         // The bubble: the current letter, large, beside the finger.
         if (fingerY >= 0f && last.isNotEmpty()) {
             val y = with(density) { fingerY.toDp() }
-            Box(Modifier.offset(x = (-96).dp, y = y - 32.dp).size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+            Box(Modifier.offset(x = if (onLeft) 62.dp else (-96).dp, y = y - 32.dp).size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center) {
                 Text(last, color = MaterialTheme.colorScheme.onPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
             }

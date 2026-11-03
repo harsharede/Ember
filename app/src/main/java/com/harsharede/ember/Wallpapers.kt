@@ -142,8 +142,62 @@ object Wallpapers {
     fun like() {
         val now = _current.value ?: return
         val prefs = EmberApp.instance.prefs
-        if (now.liked) prefs.unlikePhoto(now.id) else prefs.likePhoto(now.id)
+        if (now.liked) prefs.unlikePhoto(now.id) else {
+            prefs.likePhoto(now.id)
+            // A like keeps the photo: a copy goes into Pictures/Ember Memories (the original stays where it is).
+            if (prefs.memoriesCopy.value && !prefs.memoryCopied(now.id)) scope.launch(Dispatchers.IO) {
+                if (runCatching { copyToMemories(EmberApp.instance, now.uri) }.getOrDefault(false)) prefs.markMemoryCopied(now.id)
+            }
+        }
         _current.value = now.copy(liked = !now.liked)
+    }
+
+    const val MEMORIES_FOLDER = "Ember Memories"
+
+    /** Copy a photo into Pictures/Ember Memories through MediaStore (no extra permission: Ember owns the copy). */
+    fun copyToMemories(context: Context, source: Uri): Boolean {
+        val resolver = context.contentResolver
+        val name = resolver.query(source, arrayOf(MediaStore.Images.Media.DISPLAY_NAME, MediaStore.Images.Media.MIME_TYPE,
+            MediaStore.Images.Media.DATE_TAKEN), null, null, null)?.use { c ->
+            if (c.moveToFirst()) Triple(c.getString(0) ?: "memory.jpg", c.getString(1) ?: "image/jpeg", c.getLong(2)) else null
+        } ?: return false
+        val values = android.content.ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, name.first)
+            put(MediaStore.Images.Media.MIME_TYPE, name.second)
+            if (name.third > 0) put(MediaStore.Images.Media.DATE_TAKEN, name.third)
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/$MEMORIES_FOLDER")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val target = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return false
+        return runCatching {
+            resolver.openInputStream(source)!!.use { input -> resolver.openOutputStream(target)!!.use { input.copyTo(it) } }
+            resolver.update(target, android.content.ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            true
+        }.getOrElse { resolver.delete(target, null, null); false }
+    }
+
+    /** Photo albums (folders) with how many photos each holds, most first, for Settings. */
+    fun albums(context: Context): List<Pair<String, Int>> {
+        val counts = HashMap<String, Int>()
+        runCatching {
+            context.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media.BUCKET_DISPLAY_NAME),
+                null, null, null)?.use { c -> while (c.moveToNext()) c.getString(0)?.let { counts[it] = (counts[it] ?: 0) + 1 } }
+        }
+        return counts.entries.sortedByDescending { it.value }.map { it.key to it.value }
+    }
+
+    /** The disliked photos that still exist, for Review & clean. */
+    fun dislikedUris(context: Context): List<Pair<Long, Uri>> {
+        val ids = EmberApp.instance.prefs.dislikedPhotos.value
+        if (ids.isEmpty()) return emptyList()
+        val found = ArrayList<Pair<Long, Uri>>()
+        context.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media._ID),
+            "${MediaStore.Images.Media._ID} IN (${ids.joinToString(",")})", null, null)?.use { c ->
+            while (c.moveToNext()) { val id = c.getLong(0); found += id to ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id) }
+        }
+        // Gone already (deleted elsewhere): stop remembering them.
+        EmberApp.instance.prefs.forgetDisliked(ids - found.map { it.first }.toSet())
+        return found
     }
 
     /** Never this one again, and a new one right away. */
@@ -165,7 +219,7 @@ object Wallpapers {
         val prefs = EmberApp.instance.prefs
         prefs.setWallpaperPending(false)
         if (!hasPhotoAccess(context)) return@withContext
-        val photos = listPhotos(context, prefs.wallpaperCameraOnly.value)
+        val photos = listPhotos(context, prefs.wallpaperCameraOnly.value, prefs.photoSource.value, prefs.photoAlbums.value, prefs.likedPhotos.value)
         if (photos.isEmpty()) return@withContext
         val scores = loadScores(context)
         val disliked = prefs.dislikedPhotos.value
@@ -216,12 +270,15 @@ object Wallpapers {
         val portrait: Boolean get() = height > width
     }
 
-    /** Camera photos big enough for the screen. Screenshots and saved images are left out unless asked for. */
-    private fun listPhotos(context: Context, cameraOnly: Boolean): List<Photo> {
+    /**
+     * Photos big enough for the screen, from where the user chose: all camera photos, chosen albums, or only favourites
+     * (liked in Ember or starred in the gallery). Screenshots, GIFs and Ember's own Memories copies are always left out.
+     */
+    private fun listPhotos(context: Context, cameraOnly: Boolean, source: Int, albums: Set<String>, liked: Set<Long>): List<Photo> {
         val out = ArrayList<Photo>()
         val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.WIDTH, MediaStore.Images.Media.HEIGHT,
             MediaStore.Images.Media.ORIENTATION, MediaStore.Images.Media.DATE_TAKEN, MediaStore.Images.Media.RELATIVE_PATH,
-            MediaStore.Images.Media.MIME_TYPE)
+            MediaStore.Images.Media.MIME_TYPE, MediaStore.Images.Media.BUCKET_DISPLAY_NAME, MediaStore.MediaColumns.IS_FAVORITE)
         context.contentResolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, null)?.use { c ->
             val iId = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
             val iW = c.getColumnIndexOrThrow(MediaStore.Images.Media.WIDTH)
@@ -230,11 +287,18 @@ object Wallpapers {
             val iT = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
             val iP = c.getColumnIndexOrThrow(MediaStore.Images.Media.RELATIVE_PATH)
             val iM = c.getColumnIndexOrThrow(MediaStore.Images.Media.MIME_TYPE)
+            val iB = c.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
+            val iF = c.getColumnIndexOrThrow(MediaStore.MediaColumns.IS_FAVORITE)
             while (c.moveToNext()) {
                 val path = c.getString(iP).orEmpty().lowercase()
                 val mime = c.getString(iM).orEmpty()
                 if (mime == "image/gif" || "screenshot" in path) continue
-                if (cameraOnly && !(path.startsWith("dcim/") && !path.contains("screen"))) continue
+                if (MEMORIES_FOLDER.lowercase() in path) continue
+                when (source) {
+                    Prefs.PHOTOS_ALBUMS -> if (c.getString(iB) !in albums) continue
+                    Prefs.PHOTOS_FAVOURITES -> if (c.getLong(iId) !in liked && c.getInt(iF) != 1) continue
+                    else -> if (cameraOnly && !(path.startsWith("dcim/") && !path.contains("screen"))) continue
+                }
                 var w = c.getInt(iW); var h = c.getInt(iH)
                 if (c.getInt(iO) % 180 == 90) { val t = w; w = h; h = t }
                 if (minOf(w, h) < 1000) continue

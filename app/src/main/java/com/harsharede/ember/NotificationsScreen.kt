@@ -56,6 +56,7 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
     val showPersistent by EmberApp.instance.prefs.showPersistent.collectAsStateWithLifecycle()
     var silentOpen by remember { mutableStateOf(false) }
     var persistentOpen by remember { mutableStateOf(false) }
+    var showTodos by remember { mutableStateOf(false) }
     val shown = if (filter == null) items else items.filter { it.packageName == filter }
     val main = shown.filter { !it.silent && !it.persistent }
     val silent = shown.filter { it.silent && !it.persistent }
@@ -67,9 +68,21 @@ fun NotificationsScreen(items: List<NotifItem>, connected: Boolean, now: Long, f
             Text("Notifications", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             if (shown.any { it.clearable }) TextButton({ shown.filter { it.clearable }.forEach { NotificationStore.dismiss(it.key) } }) { Text("Clear all") }
         }
-        if (filter != null) Row(Modifier.padding(horizontal = 16.dp)) {
-            FilterChip(true, { onFilter(null) }, label = { Text("${EmberApp.instance.apps.labelForPackage(filter)}  ✕") },
+        // Notifications or the to-do list kept from them.
+        val todos by EmberApp.instance.prefs.todos.collectAsStateWithLifecycle()
+        val openTodos = todos.count { !it.done }
+        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(!showTodos, { showTodos = false }, label = { Text("Notifications") })
+            FilterChip(showTodos, { showTodos = true }, label = { Text(if (openTodos > 0) "To-do · $openTodos" else "To-do") })
+            if (filter != null && !showTodos) FilterChip(true, { onFilter(null) }, label = { Text("${EmberApp.instance.apps.labelForPackage(filter)}  ✕") },
                 leadingIcon = { PackageIcon(filter, 18.dp) })
+        }
+        if (showTodos) {
+            LazyColumn(Modifier.fillMaxSize().nestedScroll(layer.closeConnection), contentPadding = PaddingValues(12.dp)) {
+                item(key = "todos") { TodoList(compact = false) }
+                item(key = "end") { Box(Modifier.height(120.dp)) }
+            }
+            return@Column
         }
         when {
             !connected -> Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {

@@ -206,7 +206,29 @@ class SettingsActivity : ComponentActivity() {
                             prefs.setWallpaperEvery(it); Wallpapers.schedule(this@SettingsActivity)
                         }
                         Toggle("Lock screen too", null, wpLock) { prefs.setWallpaperLock(it) }
-                        Toggle("Camera photos only", "Leave out screenshots, downloads and chat images", cameraOnly) { prefs.setWallpaperCameraOnly(it) }
+                        val source by prefs.photoSource.collectAsStateWithLifecycle()
+                        val chosenAlbums by prefs.photoAlbums.collectAsStateWithLifecycle()
+                        val memoriesCopy by prefs.memoriesCopy.collectAsStateWithLifecycle()
+                        Choice("Photos from", listOf(Prefs.PHOTOS_ALL to "All", Prefs.PHOTOS_ALBUMS to "Albums", Prefs.PHOTOS_FAVOURITES to "Favourites"), source) {
+                            prefs.setPhotoSource(it)
+                        }
+                        when (source) {
+                            Prefs.PHOTOS_ALL -> Toggle("Camera photos only", "Leave out screenshots, downloads and chat images", cameraOnly) { prefs.setWallpaperCameraOnly(it) }
+                            Prefs.PHOTOS_ALBUMS -> {
+                                val albums = remember(tick) { Wallpapers.albums(this@SettingsActivity) }
+                                Text(if (chosenAlbums.isEmpty()) "Choose one or more albums:" else "${chosenAlbums.size} chosen",
+                                    color = EmberColors.Secondary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 16.dp))
+                                albums.take(40).forEach { (name, count) ->
+                                    Toggle(name, "$count photos", name in chosenAlbums) { prefs.setPhotoAlbum(name, it) }
+                                }
+                            }
+                            else -> Text("Photos you ♥ in Ember and ones starred as favourite in your gallery.", color = EmberColors.Secondary,
+                                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
+                        }
+                        Toggle("Keep liked photos in Ember Memories", "♥ copies the photo to Pictures/${Wallpapers.MEMORIES_FOLDER}; the original stays put",
+                            memoriesCopy) { prefs.setMemoriesCopy(it) }
+                        val disliked by prefs.dislikedPhotos.collectAsStateWithLifecycle()
+                        Row_("Review & clean ${disliked.size} disliked photos") { ReviewCleanActivity.open(this@SettingsActivity) }
                         Toggle("On this day", "Once a day, a photo taken on this date in an earlier year (\"3 years ago today\")", onThisDay) { prefs.setOnThisDay(it) }
                         Toggle("Wallpaper button on Home", "A tiny button in the bottom-left corner: tap for like, new photo and dislike", wpCard) { prefs.setWallpaperCard(it) }
                         Row_("New photo now") { Wallpapers.changeNow(this@SettingsActivity) }
@@ -258,6 +280,8 @@ class SettingsActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
                     Toggle("Colours from wallpaper", "Material You: the accent and surfaces follow your wallpaper", wallpaper) { prefs.setWallpaperColors(it) }
                     Toggle("Hide Android's status bar on Home", "The rail shows the same things", hideBar) { prefs.setHideStatusBar(it) }
+                    val railLeft by prefs.railLeft.collectAsStateWithLifecycle()
+                    Toggle("Rail on the left", "For the left thumb. On Home: double-tap the time, or drag the rail across, to switch sides", railLeft) { prefs.setRailLeft(it) }
                 }
 
                 Group("App drawer") {

@@ -116,6 +116,7 @@ fun StatusCapsule(
     alpha: Float = .8f,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(36.dp),
     widthDp: Int = 92,
+    onFlip: (() -> Unit)? = null,
     onOpenNotifications: (String?) -> Unit,
 ) {
     val context = LocalContext.current
@@ -131,7 +132,10 @@ fun StatusCapsule(
     val iconSize = (widthDp * .22f).coerceIn(15f, 20f).dp
     Column(modifier.glass(shape, alpha).padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = Color.White, fontSize = timeSize, fontWeight = FontWeight.Bold, maxLines = 1)
+        // Double-tap the time to move the rail to the other edge (the other thumb).
+        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now)), color = Color.White, fontSize = timeSize, fontWeight = FontWeight.Bold, maxLines = 1,
+            modifier = if (onFlip == null) Modifier else Modifier.clip(RoundedCornerShape(12.dp))
+                .combinedClickable(onDoubleClick = onFlip, onClick = {}).padding(horizontal = 4.dp))
 
         // What's on, and (if chosen) what's off, dimmed, so it can be tapped back on.
         val icons = buildList {
@@ -300,7 +304,7 @@ private fun MoreArrow(icon: ImageVector, modifier: Modifier) {
  * away again a few seconds after the last touch.
  */
 @Composable
-fun WallpaperMini(modifier: Modifier = Modifier) {
+fun WallpaperMini(modifier: Modifier = Modifier, alignEnd: Boolean = false) {
     val context = LocalContext.current
     val current by Wallpapers.current.collectAsStateWithLifecycle()
     val changing by Wallpapers.changing.collectAsStateWithLifecycle()
@@ -327,10 +331,11 @@ fun WallpaperMini(modifier: Modifier = Modifier) {
         }
     }
     val fill = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = .75f)
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.Start) {
+    val side = if (alignEnd) Alignment.End else Alignment.Start
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = side) {
         AnimatedVisibility(open, enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
             exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.Start) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = side) {
                 Row(Modifier.widthIn(max = 180.dp).clip(RoundedCornerShape(50)).background(fill).clickable {
                     touched++
                     val c = current

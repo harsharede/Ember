@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.HourglassBottom
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.Widgets
@@ -70,6 +71,7 @@ private val CARDS = listOf(
     CardChoice("card:calendar", "Up next", "Your next events. Needs Calendar.", Icons.Rounded.CalendarMonth),
     CardChoice("card:suggestions", "App suggestions", "The apps you open most.", Icons.Rounded.Lightbulb),
     CardChoice("card:screentime", "Screen time", "Today's time per app; set limits in Settings › Screen time. Needs usage access.", Icons.Rounded.HourglassBottom),
+    CardChoice("card:todo", "To-do", "Notifications you kept with To-do, so nothing swiped away is forgotten.", Icons.Rounded.Checklist),
 )
 
 /**

@@ -131,6 +131,7 @@ fun stackItemTitle(item: String): String = when {
     item == "card:calendar" -> "Up next"
     item == "card:suggestions" -> "App suggestions"
     item == "card:screentime" -> "Screen time"
+    item == "card:todo" -> "To-do"
     item.startsWith("feed:") -> EmberApp.instance.apps.labelForPackage(item.removePrefix("feed:"))
     item.startsWith("widget:") -> item.removePrefix("widget:").toIntOrNull()?.let { id ->
         runCatching { Widgets.manager.getAppWidgetInfo(id)?.let { info ->
@@ -215,6 +216,7 @@ fun SmartStackCard(
                     item == "card:calendar" -> CalendarCard()
                     item == "card:suggestions" -> suggestions()
                     item == "card:screentime" -> ScreenTimeCard()
+                    item == "card:todo" -> TodoCard()
                     item.startsWith("feed:") -> feeds[item.removePrefix("feed:")]?.filter { !it.conversation }?.takeIf { it.isNotEmpty() }
                         ?.let { FeedCard(item.removePrefix("feed:"), it) }
                     item.startsWith("widget:") -> item.removePrefix("widget:").toIntOrNull()?.let { WidgetFrame(it, widthDp, height) }

@@ -85,6 +85,13 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Ember.Light" />
 
+        <!-- Review & clean: photos disliked as wallpaper, sent to Android's trash together. -->
+        <activity
+            android:name=".ReviewCleanActivity"
+            android:exported="false"
+            android:label="Review &amp; clean"
+            android:taskAffinity="com.harsharede.ember.settings" />
+
         <!-- Receives an AI's grouping of the user's apps, shared back from the AI app. Switched on only while Ember is
              waiting for one (see AiGroups.listenForAnswer), so it isn't in every share menu. -->
         <activity
