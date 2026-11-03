@@ -12,6 +12,8 @@ notification slip away.**
 <p align="center">
   <img src="docs/screenshots/settings.png" width="23%" alt="Settings on smoked glass over the wallpaper">
   <img src="docs/screenshots/light.png" width="23%" alt="The notification light on a black screen">
+  <img src="docs/screenshots/drawer-groups.png" width="23%" alt="The app drawer's Groups page: each group's name, then its apps in rows of five">
+  <img src="docs/screenshots/notifications.png" width="23%" alt="The notification page with To-do and Remind me on every notification">
 </p>
 
 I built Ember for myself, and these four problems are why.
