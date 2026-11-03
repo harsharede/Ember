@@ -1,0 +1,2 @@
+- Tapping a to-do opens it again: the message itself while Ember remembers it, otherwise its app (Work profile apps too).
+- New Groups page in the app drawer: every group open, its name and a line, then all its apps in rows of five. The cards are now under Folders.

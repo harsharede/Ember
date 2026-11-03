@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.rounded.Search
@@ -123,7 +124,7 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
-    val pager = rememberPagerState(initialPage = if (title != null) 0 else savedTab) { if (title != null) 1 else 2 }
+    val pager = rememberPagerState(initialPage = if (title != null) 0 else savedTab.coerceIn(0, 2)) { if (title != null) 1 else 3 }
     LaunchedEffect(pager.settledPage) { if (title == null) prefs.setDrawerTab(pager.settledPage) }
     LaunchedEffect(open) {
         if (open && autoKeyboard && pager.currentPage == 0) { runCatching { focus.requestFocus() }; keyboard?.show() }
@@ -159,17 +160,20 @@ fun AppDrawer(apps: List<AppEntry>, open: Boolean, layer: Layer?, onLaunch: (App
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent))
         if (title == null) SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-            listOf("A to Z", "Groups").forEachIndexed { i, label ->
+            listOf("A to Z", "Groups", "Folders").forEachIndexed { i, label ->
                 SegmentedButton(pager.currentPage == i, { scope.launch { pager.animateScrollToPage(i) } },
-                    SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
+                    SegmentedButtonDefaults.itemShape(i, 3)) { Text(label) }
             }
         }
         // Same glass as Home's cards (Customise look › Card transparency).
         val cardAlpha by prefs.cardAlpha.collectAsStateWithLifecycle()
         androidx.compose.runtime.CompositionLocalProvider(LocalGlassAlpha provides cardAlpha) {
             HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-                if (page == 0) AlphabeticalApps(apps, query, layer, onLaunch, onAddToDock, lettersLeft)
-                else GroupedApps(apps, layer, onLaunch, onAddToDock)
+                when (page) {
+                    0 -> AlphabeticalApps(apps, query, layer, onLaunch, onAddToDock, lettersLeft)
+                    1 -> GroupSections(apps, layer, onLaunch, onAddToDock)
+                    else -> GroupedApps(apps, layer, onLaunch, onAddToDock)
+                }
             }
         }
     }
@@ -254,17 +258,89 @@ private fun AppMenu(app: AppEntry, open: Boolean, onDismiss: () -> Unit, onAddTo
  * Apps in groups, as cards; tap a card to open the whole group. Groups come from the user's own choices first (moved
  * by hand or sorted by AI), automatic otherwise. Hold a card to rename or ungroup it; hold an app to move it.
  */
+/** The apps by group, in the user's order (Other last). Shared by the Groups list and the Folders cards. */
 @Composable
-private fun GroupedApps(apps: List<AppEntry>, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
+private fun rememberAppGroups(apps: List<AppEntry>): Map<String, List<AppEntry>> {
     val prefs = EmberApp.instance.prefs
     val overrides by prefs.appGroups.collectAsStateWithLifecycle()
     val order by prefs.groupOrder.collectAsStateWithLifecycle()
-    val groups = remember(apps, overrides, order) {
+    return remember(apps, overrides, order) {
         val auto = AppGroup.entries.map { it.title }
         apps.groupBy { groupNameOf(it, overrides) }.entries
             .sortedWith(compareBy({ it.key == AppGroup.OTHER.title }, { order.indexOf(it.key).let { i -> if (i < 0) 1000 + auto.indexOf(it.key) else i } }, { it.key }))
             .associate { it.key to it.value }
     }
+}
+
+/**
+ * Every group laid open, one under another: the group's name with a line, then all its apps in rows of five. The name
+ * stays at the top while its apps scroll past. Hold a name to rename or ungroup it; hold an app to move it.
+ */
+@Composable
+private fun GroupSections(apps: List<AppEntry>, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
+    val prefs = EmberApp.instance.prefs
+    val overrides by prefs.appGroups.collectAsStateWithLifecycle()
+    val groups = rememberAppGroups(apps)
+    var moving by remember { mutableStateOf<AppEntry?>(null) }
+    var renaming by remember { mutableStateOf<String?>(null) }
+    var aiSheet by remember { mutableStateOf(false) }
+    val perRow = 5
+    LazyColumn(Modifier.fillMaxSize().then(if (layer != null) Modifier.nestedScroll(layer.closeConnection) else Modifier),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
+        item(key = "ai") {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.FilledTonalButton({ aiSheet = true }) {
+                    Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp)); Text("  Sort with AI")
+                }
+                if (overrides.isNotEmpty()) androidx.compose.material3.TextButton({ prefs.resetAppGroups() }) { Text("Automatic") }
+            }
+        }
+        groups.forEach { (group, list) ->
+            stickyHeader(key = "s-$group") {
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    Row(Modifier.fillMaxWidth().background(HeaderScrim).combinedClickable(onLongClick = { menu = true }) {}
+                        .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(group, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                        Text("  ${list.size}", fontSize = 13.sp, color = EmberColors.Secondary)
+                        // The line runs on from the name to the edge, like a ruled heading.
+                        Box(Modifier.weight(1f).padding(start = 12.dp).height(1.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .55f)))
+                    }
+                    DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem({ Text("Rename") }, { menu = false; renaming = group })
+                        if (overrides.containsValue(group)) DropdownMenuItem({ Text("Ungroup (back to automatic)") }, { menu = false; prefs.ungroup(group) })
+                    }
+                }
+            }
+            items(list.chunked(perRow), key = { row -> "r-$group-${row.first().key}" }) { row ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp)) {
+                    row.forEach { app ->
+                        Box(Modifier.weight(1f)) { GridApp(app, onLaunch, onAddToDock, onMove = { moving = app }, iconSize = 48.dp) }
+                    }
+                    repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+    moving?.let { app ->
+        GroupNameDialog("Move ${app.label} to", groups.keys.toList(), current = groupNameOf(app, overrides),
+            onPick = { name -> prefs.setAppGroup(app.packageName, name); moving = null }, onDismiss = { moving = null })
+    }
+    renaming?.let { old ->
+        GroupNameDialog("Rename \"$old\"", emptyList(), current = old, onPick = { name ->
+            if (overrides.containsValue(old)) prefs.renameGroup(old, name)
+            else prefs.setAppGroups(groups[old].orEmpty().map { it.packageName }, name)
+            renaming = null
+        }, onDismiss = { renaming = null })
+    }
+    if (aiSheet) AiGroupsSheet(apps, onClose = { aiSheet = false })
+}
+
+@Composable
+private fun GroupedApps(apps: List<AppEntry>, layer: Layer?, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit) {
+    val prefs = EmberApp.instance.prefs
+    val overrides by prefs.appGroups.collectAsStateWithLifecycle()
+    val groups = rememberAppGroups(apps)
     var openGroup by remember { mutableStateOf<String?>(null) }
     var moving by remember { mutableStateOf<AppEntry?>(null) }
     var renaming by remember { mutableStateOf<String?>(null) }
@@ -362,12 +438,13 @@ private fun GroupNameDialog(title: String, existing: List<String>, current: Stri
 }
 
 @Composable
-private fun GridApp(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit, onMove: (() -> Unit)? = null) {
+private fun GridApp(app: AppEntry, onLaunch: (AppEntry) -> Unit, onAddToDock: (AppEntry) -> Unit, onMove: (() -> Unit)? = null,
+                    iconSize: androidx.compose.ui.unit.Dp = 52.dp) {
     var menu by remember { mutableStateOf(false) }
     Box {
-        Column(Modifier.clip(RoundedCornerShape(16.dp)).combinedClickable(onLongClick = { menu = true }) { onLaunch(app) }.padding(4.dp),
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).combinedClickable(onLongClick = { menu = true }) { onLaunch(app) }.padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            AppIcon(app, 52.dp)
+            AppIcon(app, iconSize)
             Text(app.label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = 4.dp))
         }

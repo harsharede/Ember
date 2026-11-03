@@ -50,7 +50,8 @@ I have small hands, and big phones are built for two. In Ember everything you to
 
 ## 3. App grouping, done by AI
 
-I'm terrible at organising apps. Ember groups them for you (Social, Messaging, Work, Money, Travel…) and if it gets
+I'm terrible at organising apps. Ember groups them for you (Social, Messaging, Work, Money, Travel…), shown either
+all open on one page (each group's name, then its apps) or as folders. If it gets
 some wrong, **Sort with AI** sends your app list (names only) to Claude, ChatGPT or Gemini through the share sheet.
 Share the answer back and Ember shows the new groups before applying them. No API keys, and Ember itself sends nothing:
 you choose what to share. You can still move any app by hand.
