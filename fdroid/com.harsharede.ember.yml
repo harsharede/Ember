@@ -1,0 +1,28 @@
+# F-Droid build recipe. To submit: fork https://gitlab.com/fdroid/fdroiddata, copy this file to
+# metadata/com.harsharede.ember.yml, and open a merge request. Descriptions and screenshots come from fastlane/.
+Categories:
+  - System
+  - Theming
+License: MIT
+AuthorName: harsharede
+SourceCode: https://github.com/harsharede/Ember
+IssueTracker: https://github.com/harsharede/Ember/issues
+Changelog: https://github.com/harsharede/Ember/releases
+
+AutoName: Ember
+
+RepoType: git
+Repo: https://github.com/harsharede/Ember.git
+
+Builds:
+  - versionName: 1.1.0
+    versionCode: 19
+    commit: v1.1.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.1.0
+CurrentVersionCode: 19

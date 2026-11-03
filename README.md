@@ -1,88 +1,126 @@
 # Ember
 
-A calm Android launcher. One Home screen, a status rail instead of a status bar, and a notification light instead of
-banners.
+**A one-handed Android launcher that brings your forgotten photos back, sorts your apps for you, and never lets a
+notification slip away.**
 
-- **Home** is a Today page: the day and date, a **Smart Stack** and your widgets. The Smart Stack holds widgets from your
-  apps (news, Reddit, weather, calendar, mail and others; whatever widgets your apps offer) and flips to the next every 5,
-  7 or 10 seconds while Home is on screen. "Pick for me" fills it with the best widget from each app, skipping search bars and
-  shortcuts; swipe sideways to flip by hand. Besides widgets it has Ember's own cards: Weather, People (recent chats, starred contacts),
-  Now playing, Up next (calendar), App suggestions, and app feeds built from apps' notifications (new YouTube videos,
-  Reddit replies, Instagram, news), which work even for apps without widgets. The pencil under the stack chooses and
-  orders them; a card asks for its permission only when you switch it on.
-- **Wallpapers from your photos** (Settings › Wallpaper): every 30 minutes or three times a day, Ember picks one of your
-  camera photos, preferring sharp ones and portrait-mode shots with a blurred background, and crops it around the
-  subject. 👎 swaps it at once and it never returns, ↻ puts a new one on, ♥ makes it come back more often. Timed changes
-  wait for the screen to go off or for Home, since a new wallpaper changes the colours and restarts open apps' screens.
-- **The rail** on the right shows the time and an icon for each thing that's on: Wi-Fi, mobile signal, VPN,
-  Bluetooth, airplane mode, Do Not Disturb, silent/vibrate, location, power saving and battery. Swipe any icon sideways
-  to hide it; Settings brings it back. The orange notification count opens to show which apps have notifications.
-  Below it, the dock: as many apps as you like, filling the room left (it scrolls, with an arrow, when the capsule above
-  grows). Hold an app to change, move or remove it. - **Wallpaper button**: tiny, in the bottom-left corner. Tap it for where and when the photo was taken (scrolling past;
-  tap to open the photo), ♥, new photo and 👎.
-- **Customize look** (hold Home): rail width, dock height, rail and card transparency, live; and two switches for the
-  welcome-back animation, where dock icons bounce into line and Home's cards drop into place when you return to Home.
-- **Pages**: hold Home › Add page for blank pages to fill with widgets; swipe sideways between them. The last page shows
-  nothing but the wallpaper: the rail, cards, buttons and navigation bar fade away (switch it off in Customize look).
-- **Swipe up** for the app drawer: every app A to Z (the keyboard opens so you can type straight away) or, one swipe
-  across, the same apps in groups. Pull it down to close.
-- **Groups** in the drawer: automatic (well-known apps, names, then the app's declared category), and yours to fix:
-  hold an app › Move to group, hold a group › Rename or Ungroup. **Sort with AI** sends your app list (names and
-  package names only) to Claude, ChatGPT or Gemini through the share sheet or clipboard; share or paste the reply back
-  and Ember shows the groups before applying them. Ember itself sends nothing.
-- **Widgets**: hold Home › Add widget. Edit Home to move, resize or remove them.
-- **Material You**: colours come from your wallpaper (or Ember's orange, in Settings).
-- **Swipe down** (or tap the count) for the notification page: a timeline under Now, Earlier today, Yesterday and
-  Older. Reply right there when the app allows it, or tap **Remind me** for 3, 5, 15 or 30 minutes or an hour. Swipe a
-  card away to dismiss it. Push up past the end to close. Silent notifications and ones that can't be dismissed
-  are folded into their own sections, and the latter have a Turn off button that opens that channel's settings.
-- **The lock-screen light.** When something arrives with the screen off, the screen wakes black at the lowest
-  brightness and only a small pill glows at the top left, blinking slowly like an old notification LED. Tap to see the
-  lock screen, swipe up to unlock into the notification page. It goes dark when the notifications are dealt with, after
-  the time you choose, or when you unlock; in a pocket the proximity sensor keeps the screen off. Do Not Disturb is respected.
-- **The pill.** When a notification arrives while you're using the phone, a small pill glows at the top left, like an
-  old phone's notification light, instead of a banner over what you're doing. Tap it or pull it down to read, reply or
-  snooze in a pop-up; flick it sideways to put it out.
+<p align="center">
+  <img src="docs/screenshots/home.png" width="23%" alt="Home: the day, weather for the next hours, the Smart Stack, and the status rail with the dock">
+  <img src="docs/screenshots/drawer-groups.png" width="23%" alt="App drawer grouped by AI">
+  <img src="docs/screenshots/notifications.png" width="23%" alt="Notifications with Remind me and To-do">
+  <img src="docs/screenshots/left-handed.png" width="23%" alt="The same Home with the rail moved to the left">
+</p>
 
-Made for the Galaxy S23 Ultra, works on any phone with Android 12 or later.
+I built Ember for myself, and these four problems are why.
 
-## Setup
+## 1. Your photos, remembered
 
-1. Install the APK and open **Ember settings**.
-2. Turn on, in order: **Use Ember as your Home app**, **Notification access**, **Display over other apps**.
-3. If Notification access is greyed out (Android 13+ does this for apps installed from a file): App info › ⋮ ›
-   Allow restricted settings, then try again.
-4. So Android's own banners don't cover the screen as well as the pill: Samsung Settings › Notifications ›
-   Notification pop-up style, and turn pop-ups off (or per app).
+Most of the photos we take are never opened again. They sit in the gallery for years, thousands of them, and the good
+ones get buried under the blurry ones.
+
+Ember puts them back in front of you. Every 30 minutes (or three times a day) it sets one of your own photos as the
+wallpaper, choosing sharp ones and portrait shots with a soft background, cropped around the subject. On the right day
+it picks **"3 years ago today"**. A tiny button in the corner tells you where and when it was taken.
+
+And it turns that into a gentle clean-up of your gallery:
+
+- **♥ keeps it.** The photo is copied to `Pictures/Ember Memories`, a folder of the moments you actually love (the
+  original stays where it was). Back it up, share it, print it.
+- **👎 sets it aside.** It never comes back as a wallpaper, and it waits in **Review & clean**, where all your 👎 photos
+  go to Android's trash in one tap (restorable for 30 days). Nothing is ever deleted without you seeing it first.
+- **Choose where photos come from:** all camera photos, only the albums you pick, or only your favourites.
+
+For bigger clean-ups (bursts, near-duplicates, the same shot eight times), Ember opens its sibling app
+[Photo Selector](https://github.com/harsharede/photo_selector) when it's installed.
+
+## 2. Made for one small hand
+
+I have small hands, and big phones are built for two. In Ember everything you touch is on one edge, under your thumb:
+
+- **The rail**: the time, Wi-Fi, Bluetooth, battery and the rest, with your favourite apps below. As many apps as you
+  like; it scrolls when the status grows.
+- **Left-handed or right-handed in one gesture.** Double-tap the time, or drag the rail across the screen, and
+  everything moves to the other side: the rail, the app drawer's A to Z letters, the wallpaper button.
+- **Swipe up anywhere** for apps, **swipe down anywhere** for notifications. No reaching for the top of the screen.
+- The A to Z strip swells like a wave under your thumb, with a tick on every letter.
+- Rail width, dock height, shape (round or rounded rectangle) and transparency are all adjustable.
+
+## 3. App grouping, done by AI
+
+I'm terrible at organising apps. Ember groups them for you (Social, Messaging, Work, Money, Travel…) and if it gets
+some wrong, **Sort with AI** sends your app list (names only) to Claude, ChatGPT or Gemini through the share sheet.
+Share the answer back and Ember shows the new groups before applying them. No API keys, and Ember itself sends nothing:
+you choose what to share. You can still move any app by hand.
+
+## 4. Notifications you can't lose
+
+A notification arrives, you swipe it away "for later", and it's gone forever. Ember fixes that:
+
+- **To-do**: on any notification, tap **To-do** and it stays in your to-do list after the notification is gone, with
+  a tap to open it again. Tick it off when it's done. It's on the notification page and can be a Smart Stack card.
+- **Remind me** in 3, 5, 15 or 30 minutes or an hour, and it comes back.
+- **Reply** right from the list, without opening the app.
+- **No banners over what you're doing**: a small light glows in the corner instead, like old phones had. With the screen
+  off, the screen wakes black and only that light blinks: an LED for phones that don't have one.
+
+## And also
+
+- **Smart Stack**: one card that flips every few seconds between weather, what's playing, your next event, screen
+  time, your to-do list, people you chat with, YouTube or Reddit posts, and any widget.
+- **Weather** beside the date for the next five hours, and rain, snow, clouds or stars drawn over the wallpaper.
+- **Status icons that do something**: tap Wi-Fi for the internet panel, Do Not Disturb to turn it off, the ringer to
+  switch ring, vibrate and silent.
+- **Focus mode**, **hidden apps** behind your fingerprint, **icon packs**, **Material You** colours from the wallpaper,
+  **smart search** (sums, unit conversions, contacts), extra **pages** for widgets and a page with nothing but the
+  wallpaper.
+
+Made on a Galaxy S23 Ultra; works on any phone with Android 12 or later.
+
+## Install
+
+- **GitHub Releases**: download the latest `ember-vX.Y.Z.apk` from
+  [Releases](https://github.com/harsharede/Ember/releases).
+- **Obtainium**: add `https://github.com/harsharede/Ember` to get updates automatically.
+- **F-Droid**: coming soon.
+
+Then open **Ember settings** and switch on, in order: Use Ember as your Home app, Notification access, Display over
+other apps. If Notification access is greyed out (Android 13+ does this for apps installed from a file): App info › ⋮ ›
+Allow restricted settings, then try again.
 
 ## Privacy
 
-Notifications, photos, app usage and settings never leave the phone. The only network use is the Weather card, if you add
-it: it sends a rounded location (or the city you chose) to Open-Meteo for the forecast. It asks for:
+Ember has no ads, no analytics, no accounts and no tracking. Your photos, notifications, contacts and app usage are read
+on the phone and never leave it. The **only** network request is the weather forecast (Open-Meteo, free and keyless),
+sent with a location rounded to about a kilometre, or the city you chose, and only if you use the weather.
+
+Every permission is optional except notification access (the core of Ember) and is asked for only when you switch on
+the feature that needs it:
 
 | Permission | Why |
 |---|---|
-| Notification access | The count, the notification page, reply, reminders and the pill |
-| Display over other apps | Showing the pill while another app is open |
+| Notification access | The notification page, to-do, reply, reminders, the light and the count on the rail |
+| Display over other apps | The light in the corner while another app is open, and waking the screen for the lock-screen light |
 | Query all packages | Listing your apps (every launcher needs this) |
-| Network state | The Wi-Fi, mobile and VPN icons |
-| Request delete packages | Uninstall from the drawer; Android always asks first |
-| Photos (read only) | Choosing wallpapers from your camera photos; they're analysed on the phone and never leave it |
-| Internet | Only the Weather card's forecast (Open-Meteo) |
-| Approximate location (optional) | The forecast for where you are; choose a city instead to skip it |
-| Contacts (optional) | Starred contacts on the People card |
-| Calendar (optional) | The Up next card |
-| Photo locations (optional) | Naming where the wallpaper photo was taken, from the photo's own GPS data |
-| Set wallpaper | Putting the chosen photo on Home and the lock screen |
-| Wake lock, turn screen on | The lock-screen light: waking the screen, keeping it on while it glows, the pocket sensor |
+| Photos, photo locations | Wallpapers from your photos, Ember Memories, Review & clean, and naming where a photo was taken |
+| Internet, approximate location | The weather forecast only (or choose a city and skip location) |
+| Contacts, calendar | The People and Up next cards, and contacts in search |
+| Usage access, notifications | The Screen time card and its gentle limit reminders |
+| Do Not Disturb access | Turning Do Not Disturb off from its icon |
+| Biometric | Unlocking hidden apps |
+| Set wallpaper, wake lock, turn screen on | Changing the wallpaper and the lock-screen light |
 
 ## Building
 
-Every push builds debug and release APKs and runs the unit tests (GitHub Actions › Build › artifacts). Locally:
-`./gradlew :app:assembleDebug` with the Android SDK installed.
+```
+git clone https://github.com/harsharede/Ember
+cd Ember
+./gradlew :app:assembleDebug
+```
 
-The release build is signed with the throwaway key in `app/debug.keystore` so anyone can install it. **Before publishing
-to the Play Store, create your own upload key** and keep it out of the repository.
+Needs JDK 17 and the Android SDK (Android Studio has both). Every push is built and tested by GitHub Actions; tagged
+versions are signed and published by the Release workflow (see [RELEASING.md](RELEASING.md)).
+
+Contributions are welcome: issues, ideas and pull requests. Ember is written in Kotlin with Jetpack Compose, one
+feature per file in `app/src/main/java/com/harsharede/ember/`.
 
 ## License
 

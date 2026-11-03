@@ -25,6 +25,14 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Official releases: signed with the owner's private key, given to CI as secrets (never in the repository).
+        val releaseStore = System.getenv("EMBER_KEYSTORE")?.let { file(it) }?.takeIf { it.exists() }
+        if (releaseStore != null) create("release") {
+            storeFile = releaseStore
+            storePassword = System.getenv("EMBER_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("EMBER_KEY_ALIAS") ?: "ember"
+            keyPassword = System.getenv("EMBER_KEY_PASSWORD") ?: System.getenv("EMBER_KEYSTORE_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -37,7 +45,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("shared")
+            // The private key when CI has it (tagged releases); the throwaway key for everyday test builds.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("shared")
         }
     }
 

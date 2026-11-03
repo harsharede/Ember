@@ -1,0 +1,5 @@
+• Ember Memories: ♥ copies a photo to Pictures/Ember Memories
+• Review & clean: trash disliked photos together (restorable for 30 days)
+• Wallpaper photos from all photos, chosen albums or favourites
+• To-do: keep any notification as a to-do, with a Smart Stack card
+• Rail on the left or right: double-tap the time or drag it across

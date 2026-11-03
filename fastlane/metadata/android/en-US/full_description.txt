@@ -1,0 +1,31 @@
+<p>Ember is a launcher built for one small hand, for people whose photos sit unopened in the gallery, who are bad at organising apps, and who lose notifications they meant to come back to.</p>
+
+<p><b>Your photos, remembered</b></p>
+<ul>
+<li>Your own photos become the wallpaper every 30 minutes or three times a day, choosing sharp shots and portraits with a soft background, cropped around the subject.</li>
+<li>"On this day": photos from this date in earlier years.</li>
+<li>♥ copies a photo to Pictures/Ember Memories; 👎 sets it aside for Review &amp; clean, which sends them to the trash together (restorable for 30 days).</li>
+<li>Photos from all camera photos, chosen albums, or only favourites.</li>
+</ul>
+
+<p><b>Made for one hand</b></p>
+<ul>
+<li>A rail on one edge holds the status icons and as many favourite apps as you like.</li>
+<li>Move it to the other side by double-tapping the time or dragging it across.</li>
+<li>Swipe up anywhere for apps, swipe down anywhere for notifications.</li>
+</ul>
+
+<p><b>App grouping by AI</b></p>
+<ul>
+<li>Apps are grouped automatically; "Sort with AI" shares your app list with the AI app you choose and applies its answer after you review it. Ember itself sends nothing.</li>
+</ul>
+
+<p><b>Notifications you can't lose</b></p>
+<ul>
+<li>Add any notification to your To-do list, so it stays after the notification is gone.</li>
+<li>Remind me later, reply in place, and a small notification light instead of banners, also on the lock screen.</li>
+</ul>
+
+<p><b>Also</b>: Smart Stack (weather, music, calendar, screen time, to-do, widgets), weather on the wallpaper, Focus mode, hidden apps, icon packs, Material You colours, smart search.</p>
+
+<p>No ads, no analytics, no accounts. The only network request is the optional weather forecast from Open-Meteo.</p>
