@@ -67,7 +67,7 @@ private data class CardChoice(val item: String, val title: String, val detail: S
 private val CARDS = listOf(
     CardChoice("card:weather", "Weather", "Now and the next hours. Uses the internet (Open-Meteo) and your location or a city you choose.", Icons.Rounded.WbSunny),
     CardChoice("card:people", "People", "Recent chats from your notifications; with Contacts allowed, your starred contacts too.", Icons.Rounded.People),
-    CardChoice("card:media", "Now playing", "Whatever's playing (YouTube, Spotify…), with controls. Shows only while something plays.", Icons.Rounded.MusicNote),
+    CardChoice("card:media", "Now playing", "Whatever's playing (YouTube, Spotify…), with controls. While something plays the stack goes to it and stays there, even if this card is off.", Icons.Rounded.MusicNote),
     CardChoice("card:calendar", "Up next", "Your next events. Needs Calendar.", Icons.Rounded.CalendarMonth),
     CardChoice("card:suggestions", "App suggestions", "The apps you open most.", Icons.Rounded.Lightbulb),
     CardChoice("card:screentime", "Screen time", "Today's time per app; set limits in Settings › Screen time. Needs usage access.", Icons.Rounded.HourglassBottom),

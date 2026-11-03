@@ -161,8 +161,10 @@ fun SmartStackCard(
     val feeds by Feeds.posts.collectAsStateWithLifecycle()
     val starred by CardData.starred.collectAsStateWithLifecycle()
     val events by CardData.events.collectAsStateWithLifecycle()
-    val pages = remember(items, media != null, feeds, starred.isNotEmpty(), events.isNotEmpty()) {
-        items.filter { item ->
+    val playing = media?.playing == true
+    val pages = remember(items, media != null, playing, feeds, starred.isNotEmpty(), events.isNotEmpty()) {
+        // While something plays, its controls are in the stack even if the media card isn't chosen.
+        (if (playing && "card:media" !in items) listOf("card:media") + items else items).filter { item ->
             when {
                 item == "card:media" -> media != null
                 item == "card:people" -> starred.isNotEmpty() || recentPeople(feeds, 1).isNotEmpty()
@@ -192,6 +194,15 @@ fun SmartStackCard(
     var touchedAt by remember { mutableLongStateOf(0L) }
     val isActive by rememberUpdatedState(active && !editing)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    // Something starts playing: go to the player (the nearest copy ahead in the loop).
+    val currentPages by rememberUpdatedState(pages)
+    val playingNow by rememberUpdatedState(playing)
+    LaunchedEffect(playing) {
+        if (!playing) return@LaunchedEffect
+        val p = currentPages
+        val offset = (0 until p.size).firstOrNull { p[(pager.currentPage + it).mod(p.size)] == "card:media" } ?: return@LaunchedEffect
+        if (offset > 0) pager.animateScrollToPage(pager.currentPage + offset)
+    }
     LaunchedEffect(pages.size, seconds) {
         if (pages.size < 2) return@LaunchedEffect
         // Only while Home is in front (RESUMED): with the screen off or another app open, nothing moves.
@@ -199,7 +210,9 @@ fun SmartStackCard(
             while (true) {
                 delay(seconds * 1000L)
                 val idle = System.currentTimeMillis() - touchedAt > 12_000
-                if (isActive && idle && !pager.isScrollInProgress) {
+                // While something plays, the stack rests on the player instead of flipping past it.
+                val holding = playingNow && itemAt(pager.currentPage) == "card:media"
+                if (isActive && idle && !holding && !pager.isScrollInProgress) {
                     val next = pager.currentPage + 1
                     pager.animateScrollToPage(next)
                 }
