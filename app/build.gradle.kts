@@ -12,8 +12,8 @@ android {
         applicationId = "com.harsharede.ember"
         minSdk = 31
         targetSdk = 35
-        versionCode = 23
-        versionName = "1.2.3"
+        versionCode = 24
+        versionName = "1.2.4"
     }
 
     signingConfigs {
@@ -30,8 +30,9 @@ android {
         if (releaseStore != null) create("release") {
             storeFile = releaseStore
             storePassword = System.getenv("EMBER_KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("EMBER_KEY_ALIAS") ?: "ember"
-            keyPassword = System.getenv("EMBER_KEY_PASSWORD") ?: System.getenv("EMBER_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("EMBER_KEY_ALIAS")?.takeIf { it.isNotEmpty() } ?: "ember"
+            // An unset GitHub secret arrives as an empty string, not a missing one: fall back to the store password then.
+            keyPassword = System.getenv("EMBER_KEY_PASSWORD")?.takeIf { it.isNotEmpty() } ?: System.getenv("EMBER_KEYSTORE_PASSWORD")
         }
     }
 
