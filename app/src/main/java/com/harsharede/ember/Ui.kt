@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -71,7 +72,13 @@ private val EmberScheme = darkColorScheme(
 fun EmberTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val fromWallpaper by EmberApp.instance.prefs.wallpaperColors.collectAsState()
-    val base = if (fromWallpaper) dynamicDarkColorScheme(context) else EmberScheme
+    val seed by WallpaperTheme.seed.collectAsState()
+    // Built from the wallpaper itself; Android's dynamic scheme only until the wallpaper's colours have been read.
+    val base = when {
+        !fromWallpaper -> EmberScheme
+        seed != null -> remember(seed) { WallpaperTheme.scheme(seed!!) }
+        else -> dynamicDarkColorScheme(context)
+    }
     // One glass for everything: every surface (cards, menus, dialogs, sheets, settings) is a near-black smoked glass with a
     // whisper of the accent, instead of Material's lighter grey-lilac containers, which looked milky over photos.
     val ink = Color(0xFF0D0E11)
